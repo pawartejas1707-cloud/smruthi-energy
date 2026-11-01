@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import { connectDB } from './config/db.js';
 import { seedInitialDatabase } from './utils/seedData.js';
 import apiRoutes from './routes/api.js';
@@ -24,17 +25,24 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api', apiRoutes);
 
 // In production, serve the compiled Vite frontend static assets
-const clientDistPath = path.join(__dirname, '../../dist');
+// Look in process.cwd()/dist or relative to __dirname
+let clientDistPath = path.resolve(process.cwd(), 'dist');
+if (!fs.existsSync(clientDistPath)) {
+  clientDistPath = path.resolve(__dirname, '../dist');
+}
+
+console.log(`📂 [Serving Static Assets]: ${clientDistPath} (Exists: ${fs.existsSync(clientDistPath)})`);
+
 app.use(express.static(clientDistPath));
 
 // Client-side SPA routing fallback (compatible with Express 5)
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
-    return res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
-      if (err) {
-        res.status(200).send('Smruthi Organics Electrical Department API is running.');
-      }
-    });
+    const indexPath = path.join(clientDistPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    return res.status(200).send('Smruthi Organics Electrical Department API is running.');
   }
   next();
 });
