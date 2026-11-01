@@ -11,17 +11,32 @@ import {
   Terminal,
   Cpu,
 } from 'lucide-react';
-import { isSupabaseConfigured, activeSupabaseUrl } from '../../lib/supabase';
 import { useApp } from '../../context/AppContext';
 
 export const DatabaseView: React.FC<{ onOpenConfigModal: () => void }> = ({ onOpenConfigModal }) => {
-  const { resetToDefaultData } = useApp();
+  const { isBackendConnected, resetToDefaultData } = useApp();
   const [copiedEnv, setCopiedEnv] = useState(false);
+  const [copiedRenderYaml, setCopiedRenderYaml] = useState(false);
 
   const envSample = `# SMRUTHI ORGANICS – ELECTRICAL DEPARTMENT
-# .env.local Configuration for Production Vercel / Local Vite
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+# MongoDB Atlas & Render Environment Variables
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/smruthi_energy?retryWrites=true&w=majority
+PORT=5000
+NODE_ENV=production
+`;
+
+  const renderYamlSample = `services:
+  - type: web
+    name: smruthi-energy-portal
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
 `;
 
   const handleCopyEnv = () => {
@@ -30,26 +45,32 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
     setTimeout(() => setCopiedEnv(false), 2000);
   };
 
+  const handleCopyRenderYaml = () => {
+    navigator.clipboard.writeText(renderYamlSample);
+    setCopiedRenderYaml(true);
+    setTimeout(() => setCopiedRenderYaml(false), 2000);
+  };
+
   return (
     <div className="space-y-6">
       {/* Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Cloud className="w-5 h-5 text-cyan-400" />
-            Database Architecture & Free Tier Deployment (₹0 Cost)
+            <Server className="w-5 h-5 text-emerald-400" />
+            MongoDB Atlas & Render Backend Architecture (₹0 Cost)
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Production deployment guide for Supabase PostgreSQL + Vercel Free Plan.
+            Production deployment guide for Node.js Express API + MongoDB Atlas + Render Free Tier Web Service.
           </p>
         </div>
 
         <button
           onClick={onOpenConfigModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-slate-950 shadow-lg shadow-cyan-950/40 transition-all self-start sm:self-auto"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-lg shadow-emerald-950/40 transition-all self-start sm:self-auto"
         >
           <Database className="w-4 h-4" />
-          {isSupabaseConfigured ? 'Manage Supabase Connection' : 'Connect Supabase (₹0 Cost)'}
+          {isBackendConnected ? 'MongoDB Live (Connected)' : 'Configure MongoDB & Render'}
         </button>
       </div>
 
@@ -57,55 +78,55 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
       <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl space-y-4">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          Free-Tier Technologies & Limit Verification
+          Free-Tier Technologies & Resource Verification
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
-          {/* Supabase Free Plan */}
+          {/* MongoDB Atlas */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-emerald-400">Supabase PostgreSQL</span>
+              <span className="font-bold text-emerald-400">MongoDB Atlas (M0)</span>
               <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 text-[10px] border border-emerald-800">
-                ₹0 / month
+                ₹0 Forever
               </span>
             </div>
             <ul className="space-y-1 text-slate-400 font-sans text-xs">
-              <li>• 500 MB database storage (adequate for 10+ years of daily 21-section readings)</li>
-              <li>• 50,000 monthly active users</li>
-              <li>• Row Level Security (RLS) enabled</li>
-              <li>• SSL encrypted PostgreSQL connections</li>
+              <li>• 512 MB permanent cloud document storage</li>
+              <li>• Automated daily backups & replica set</li>
+              <li>• SSL TLS 1.3 encrypted cluster connection</li>
+              <li>• Supports 10+ years of daily 21-section entries</li>
             </ul>
           </div>
 
-          {/* Vercel Free Plan */}
+          {/* Render Web Service */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-cyan-400">Vercel Edge Hosting</span>
+              <span className="font-bold text-cyan-400">Render Free Web Service</span>
               <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 text-[10px] border border-cyan-800">
                 ₹0 / month
               </span>
             </div>
             <ul className="space-y-1 text-slate-400 font-sans text-xs">
-              <li>• 100 GB bandwidth / month</li>
-              <li>• Automated CI/CD from GitHub</li>
-              <li>• Global Edge CDN for sub-50ms latency</li>
-              <li>• Free custom domain SSL certificate</li>
+              <li>• 750 free instance hours / month</li>
+              <li>• Automated CI/CD directly from GitHub repo</li>
+              <li>• Free managed SSL certificate & custom domain</li>
+              <li>• Runs Express server + serves React bundle</li>
             </ul>
           </div>
 
-          {/* Source & Sync */}
+          {/* Multi-PC Sync */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-amber-400">Multi-PC Sync</span>
+              <span className="font-bold text-amber-400">Plant-Wide Sync</span>
               <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 text-[10px] border border-amber-800">
-                Realtime
+                REST API
               </span>
             </div>
             <ul className="space-y-1 text-slate-400 font-sans text-xs">
-              <li>• Centralized Supabase cloud storage</li>
-              <li>• Reading operator enters on mobile/tablet</li>
-              <li>• Plant Admin sees live readings instantly</li>
-              <li>• Offline fallback ensures zero data loss</li>
+              <li>• Unified Node.js backend port</li>
+              <li>• Reading operator logs from substation tablet</li>
+              <li>• Plant Admin views real-time graphs instantly</li>
+              <li>• Zero CORS configuration required</li>
             </ul>
           </div>
         </div>
@@ -115,25 +136,24 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
       <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl space-y-4">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Terminal className="w-4 h-4 text-cyan-400" />
-          Step-by-Step Production Deployment Instructions
+          Production Deployment on Render + MongoDB Atlas
         </h3>
 
         <div className="space-y-3 text-xs text-slate-300">
-          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="font-bold text-white mb-1">Step 1: Setup Supabase Database</div>
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+            <div className="font-bold text-white">Step 1: Create MongoDB Atlas Cluster (Free M0)</div>
             <p className="text-slate-400 leading-relaxed font-sans">
-              1. Sign in to <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">supabase.com</a>.<br />
-              2. Click "New Project" and name it <code className="text-cyan-300">smruthi-energy</code>.<br />
-              3. Go to the <strong>SQL Editor</strong> tab on the left navigation.<br />
-              4. Open the file <code className="text-cyan-300">supabase/schema.sql</code> in this repository, paste the entire SQL code and click <strong>RUN</strong>.<br />
-              5. All tables (<code className="text-cyan-300">sections</code>, <code className="text-cyan-300">meters</code>, <code className="text-cyan-300">meter_readings</code>, <code className="text-cyan-300">transformer_readings</code>, <code className="text-cyan-300">cost_settings</code>, <code className="text-cyan-300">consumption_alerts</code>, <code className="text-cyan-300">enquiries</code>) and initial seed data for all 21 sections will be created immediately with Row Level Security.
+              1. Sign up at <a href="https://mongodb.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">mongodb.com</a> and create a free <strong>M0 Shared Cluster</strong>.<br />
+              2. Go to <strong>Security → Database Access</strong>: Create a database username & password.<br />
+              3. Go to <strong>Security → Network Access</strong>: Add IP Address <code className="text-cyan-300">0.0.0.0/0</code> (Allow Access from Anywhere).<br />
+              4. Click <strong>Connect → Drivers</strong>: Copy the connection string URI.
             </p>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="font-bold text-white mb-1">Step 2: Connect Environment Variables</div>
-            <p className="text-slate-400 leading-relaxed font-sans mb-2">
-              In Supabase Project Settings → API, copy <strong>Project URL</strong> and <strong>Project API Keys (anon public)</strong>.
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+            <div className="font-bold text-white">Step 2: Environment Variables Template</div>
+            <p className="text-slate-400 leading-relaxed font-sans">
+              Set these variables in your Render Web Service settings (or in <code className="text-cyan-300">.env</code> locally):
             </p>
             <div className="relative">
               <pre className="p-3 rounded-lg bg-slate-900 border border-slate-800 font-mono text-xs text-slate-300 overflow-x-auto">
@@ -149,29 +169,32 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="font-bold text-white mb-1">Step 3: Deploy to Vercel (Free Plan)</div>
+          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+            <div className="font-bold text-white">Step 3: Deploy on Render.com (₹0 Cost)</div>
             <p className="text-slate-400 leading-relaxed font-sans">
-              1. Push this repository to your GitHub account: <code className="text-cyan-300">git push origin main</code>.<br />
-              2. Go to <a href="https://vercel.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">vercel.com</a> and click "Add New Project".<br />
-              3. Select your repository, add the two environment variables (<code className="text-cyan-300">VITE_SUPABASE_URL</code> and <code className="text-cyan-300">VITE_SUPABASE_ANON_KEY</code>), and click <strong>Deploy</strong>.<br />
-              4. Your site will be live on <code className="text-cyan-300">https://smruthi-energy.vercel.app</code> with continuous updates, SSL security, and ₹0 costs!
+              1. Go to <a href="https://render.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">render.com</a> and sign in with GitHub.<br />
+              2. Click <strong>New +</strong> → <strong>Web Service</strong>.<br />
+              3. Connect your repository: <code className="text-cyan-300">pawartejas1707-cloud/smruthi-energy</code>.<br />
+              4. Set <strong>Build Command</strong>: <code className="text-cyan-300">npm run build</code><br />
+              5. Set <strong>Start Command</strong>: <code className="text-cyan-300">npm start</code><br />
+              6. Under <strong>Environment Variables</strong>, add your <code className="text-cyan-300">MONGODB_URI</code> and <code className="text-cyan-300">NODE_ENV=production</code>.<br />
+              7. Click <strong>Deploy Web Service</strong>. Render will build the React frontend, compile the Express server, connect to MongoDB Atlas, seed all 21 sections, and serve the application live!
             </p>
           </div>
         </div>
       </div>
 
-      {/* Reset & Maintenance */}
+      {/* Reset Simulation State */}
       <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl flex items-center justify-between">
         <div>
-          <h4 className="text-sm font-bold text-white">Reset Local Simulation State</h4>
+          <h4 className="text-sm font-bold text-white">Reset Local Simulation Cache</h4>
           <p className="text-xs text-slate-400 mt-0.5">
-            Reset local test readings and restore fresh realistic 30-day industrial logs.
+            Clear browser storage and reload default 21 sections & 30-day realistic readings.
           </p>
         </div>
         <button
           onClick={() => {
-            if (confirm('Reset demo data to default initial state?')) {
+            if (confirm('Reset simulation data to default initial state?')) {
               resetToDefaultData();
             }
           }}

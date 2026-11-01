@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import {
+import type {
   UserRole,
   UserProfile,
   Section,
@@ -12,14 +12,14 @@ import {
 } from '../types';
 import { INITIAL_SECTIONS } from '../data/initialSections';
 import { generateRealisticHistoricalData, DEFAULT_COST_SETTINGS } from '../data/sampleHistory';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { api } from '../lib/api';
 
 interface AppContextType {
   // Role & User
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
   currentUser: UserProfile;
-  
+
   // Data State
   sections: Section[];
   readings: DailyReading[];
@@ -28,8 +28,8 @@ interface AppContextType {
   enquiries: EnquiryRecord[];
   costSettings: CostSettings;
   isLoading: boolean;
-  isSupabaseLive: boolean;
-  
+  isBackendConnected: boolean;
+
   // Operations
   addDailyReading: (reading: Omit<DailyReading, 'id' | 'createdAt'>) => Promise<void>;
   addTransformerReading: (reading: Omit<TransformerReading, 'id' | 'createdAt'>) => Promise<void>;
@@ -78,6 +78,9 @@ const ROLE_PROFILES: Record<UserRole, UserProfile> = {
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentRole, setCurrentRole] = useState<UserRole>('electrical_admin');
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
   const [sections, setSections] = useState<Section[]>(() => {
     const saved = localStorage.getItem('smruthi_sections');
     return saved ? JSON.parse(saved) : INITIAL_SECTIONS;
@@ -137,9 +140,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
   });
 
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Sync to local state backup
+  // Local backups
   useEffect(() => {
     localStorage.setItem('smruthi_sections', JSON.stringify(sections));
   }, [sections]);
@@ -164,33 +165,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('smruthi_enquiries', JSON.stringify(enquiries));
   }, [enquiries]);
 
-  // Load from Supabase if configured
+  // Connect to Express & MongoDB backend
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-
-    async function fetchSupabaseData() {
+    async function initBackend() {
       setIsLoading(true);
-      try {
-        // Fetch sections
-        const { data: secData } = await supabase!.from('sections').select('*, meters(*)');
+      const health = await api.checkHealth();
+      if (health && health.status === 'ok') {
+        setIsBackendConnected(true);
+
+        // Fetch live sections
+        const secData = await api.getSections();
         if (secData && secData.length > 0) {
           const mapped: Section[] = secData.map((s: any) => ({
-            id: s.id,
+            id: s._id || s.id,
             code: s.code,
             name: s.name,
             description: s.description || '',
-            dailyLimitKwh: Number(s.daily_limit_kwh),
+            dailyLimitKwh: s.dailyLimitKwh,
             category: s.category,
             meters: (s.meters || []).map((m: any) => ({
-              id: m.id,
-              sectionId: m.section_id,
-              meterCode: m.meter_code,
-              meterName: m.meter_name,
-              meterType: m.meter_type,
-              kwhMf: Number(m.kwh_mf),
-              kvahMf: Number(m.kvah_mf),
-              contractDemandMf: Number(m.contract_demand_mf),
-              isActive: m.is_active,
+              id: m._id || m.meterCode,
+              sectionId: s._id || s.id,
+              meterCode: m.meterCode,
+              meterName: m.meterName,
+              meterType: m.meterType,
+              kwhMf: m.kwhMf,
+              kvahMf: m.kvahMf,
+              contractDemandMf: m.contractDemandMf,
+              isActive: m.isActive,
               notes: m.notes,
             })),
           }));
@@ -198,33 +200,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         // Fetch cost settings
-        const { data: costData } = await supabase!
-          .from('cost_settings')
-          .select('*')
-          .order('effective_date', { ascending: false })
-          .limit(1);
-        if (costData && costData.length > 0) {
-          const c = costData[0];
+        const costData = await api.getCosting();
+        if (costData) {
           setCostSettings({
-            id: c.id,
-            ratePerKwh: Number(c.rate_per_kwh),
-            effectiveDate: c.effective_date,
-            demandChargePerKva: Number(c.demand_charge_per_kva),
-            fixedMonthlyCharges: Number(c.fixed_monthly_charges),
-            taxRatePercent: Number(c.tax_rate_percent),
-            fuelAdjustmentChargePerKwh: Number(c.fuel_adjustment_charge_per_kwh),
-            updatedAt: c.updated_at,
-            updatedBy: c.updated_by,
+            id: costData._id || costData.id,
+            ratePerKwh: costData.ratePerKwh,
+            effectiveDate: costData.effectiveDate,
+            demandChargePerKva: costData.demandChargePerKva,
+            fixedMonthlyCharges: costData.fixedMonthlyCharges,
+            taxRatePercent: costData.taxRatePercent,
+            fuelAdjustmentChargePerKwh: costData.fuelAdjustmentChargePerKwh,
+            updatedAt: costData.updatedAt || new Date().toISOString(),
+            updatedBy: costData.updatedBy,
           });
         }
-      } catch (err) {
-        console.warn('Supabase fetch notice: using cached/offline data', err);
-      } finally {
-        setIsLoading(false);
+
+        // Fetch readings
+        const rData = await api.getReadings({ limit: 500 });
+        if (rData && rData.length > 0) {
+          setReadings(
+            rData.map((r: any) => ({
+              id: r._id || r.id,
+              date: r.date,
+              time: r.time,
+              sectionId: r.sectionId,
+              meterId: r.meterId,
+              meterCode: r.meterCode,
+              meterName: r.meterName,
+              prevKwh: r.prevKwh,
+              currKwh: r.currKwh,
+              kwhMf: r.kwhMf,
+              consumedKwh: r.consumedKwh,
+              prevKvah: r.prevKvah,
+              currKvah: r.currKvah,
+              kvahMf: r.kvahMf,
+              consumedKvah: r.consumedKvah,
+              powerFactor: r.powerFactor,
+              prevDemand: r.prevDemand,
+              currDemand: r.currDemand,
+              demandMf: r.demandMf,
+              calculatedDemand: r.calculatedDemand,
+              operatorName: r.operatorName,
+              shift: r.shift,
+              notes: r.notes,
+              createdAt: r.createdAt || r.date,
+            }))
+          );
+        }
+
+        // Fetch transformers
+        const tData = await api.getTransformers();
+        if (tData && tData.length > 0) {
+          setTransformerReadings(
+            tData.map((t: any) => ({
+              id: t._id || t.id,
+              date: t.date,
+              time: t.time,
+              mainKwhUnits: t.mainKwhUnits,
+              t750Prev: t.t750Prev,
+              t750Curr: t.t750Curr,
+              t750Mf: t.t750Mf,
+              t750Units: t.t750Units,
+              t950Prev: t.t950Prev,
+              t950Curr: t.t950Curr,
+              t950Mf: t.t950Mf,
+              t950Units: t.t950Units,
+              totalOutputUnits: t.totalOutputUnits,
+              transformerLosses: t.transformerLosses,
+              lossPercentage: t.lossPercentage,
+              operatorName: t.operatorName,
+              notes: t.notes,
+              createdAt: t.createdAt || t.date,
+            }))
+          );
+        }
+
+        // Fetch alerts
+        const aData = await api.getAlerts();
+        if (aData && aData.length > 0) {
+          setAlerts(
+            aData.map((a: any) => ({
+              id: a._id || a.id,
+              date: a.date,
+              sectionId: a.sectionId,
+              sectionName: a.sectionName,
+              limitKwh: a.limitKwh,
+              consumedKwh: a.consumedKwh,
+              exceededKwh: a.exceededKwh,
+              exceededPercentage: a.exceededPercentage,
+              status: a.status,
+              createdAt: a.createdAt || a.date,
+            }))
+          );
+        }
+
+        // Fetch enquiries
+        const eData = await api.getEnquiries();
+        if (eData && eData.length > 0) {
+          setEnquiries(
+            eData.map((e: any) => ({
+              id: e._id || e.id,
+              alertId: e.alertId,
+              sectionId: e.sectionId,
+              sectionName: e.sectionName,
+              date: e.date,
+              consumedKwh: e.consumedKwh,
+              limitKwh: e.limitKwh,
+              exceededKwh: e.exceededKwh,
+              subject: e.subject,
+              message: e.message,
+              sentBy: e.sentBy,
+              sentByEmail: e.sentByEmail,
+              sentTo: e.sentTo,
+              sentToEmail: e.sentToEmail,
+              status: e.status,
+              replyMessage: e.replyMessage,
+              repliedBy: e.repliedBy,
+              repliedAt: e.repliedAt,
+              createdAt: e.createdAt || e.date,
+            }))
+          );
+        }
+      } else {
+        setIsBackendConnected(false);
       }
+      setIsLoading(false);
     }
 
-    fetchSupabaseData();
+    initBackend();
   }, []);
 
   const currentUser = useMemo(() => ROLE_PROFILES[currentRole], [currentRole]);
@@ -240,10 +343,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setReadings((prev) => [fullReading, ...prev]);
 
-    // Check if section limit exceeded for this day
+    // Check section limit violation
     const sec = sections.find((s) => s.id === reading.sectionId);
     if (sec) {
-      // Sum all readings for this section on this day
       const existingSecReadings = readings.filter(
         (r) => r.date === reading.date && r.sectionId === reading.sectionId && r.meterId !== reading.meterId
       );
@@ -254,7 +356,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const exceededKwh = Number((totalSecConsumed - sec.dailyLimitKwh).toFixed(1));
         const exceededPercentage = Number(((exceededKwh / sec.dailyLimitKwh) * 100).toFixed(1));
 
-        // Create alert if not already logged today
         setAlerts((prevAlerts) => {
           const alreadyAlerted = prevAlerts.some(
             (a) => a.date === reading.date && a.sectionId === sec.id
@@ -279,31 +380,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // Sync to Supabase if live
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('meter_readings').insert({
-          reading_date: reading.date,
-          reading_time: reading.time,
-          section_id: reading.sectionId,
-          meter_id: reading.meterId,
-          prev_kwh: reading.prevKwh,
-          curr_kwh: reading.currKwh,
-          kwh_mf: reading.kwhMf,
-          prev_kvah: reading.prevKvah,
-          curr_kvah: reading.currKvah,
-          kvah_mf: reading.kvahMf,
-          power_factor: reading.powerFactor,
-          prev_demand: reading.prevDemand || 0,
-          curr_demand: reading.currDemand || 0,
-          demand_mf: reading.demandMf,
-          operator_name: reading.operatorName,
-          shift: reading.shift,
-          notes: reading.notes,
-        });
-      } catch (err) {
-        console.error('Supabase write error:', err);
-      }
+    if (isBackendConnected) {
+      await api.addReading(reading);
     }
   };
 
@@ -317,27 +395,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setTransformerReadings((prev) => [full, ...prev]);
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('transformer_readings').insert({
-          reading_date: tReading.date,
-          reading_time: tReading.time,
-          main_kwh_units: tReading.mainKwhUnits,
-          t750_prev: tReading.t750Prev,
-          t750_curr: tReading.t750Curr,
-          t750_mf: tReading.t750Mf,
-          t950_prev: tReading.t950Prev,
-          t950_curr: tReading.t950Curr,
-          t950_mf: tReading.t950Mf,
-          total_output_units: tReading.totalOutputUnits,
-          transformer_losses: tReading.transformerLosses,
-          loss_percentage: tReading.lossPercentage,
-          operator_name: tReading.operatorName,
-          notes: tReading.notes,
-        });
-      } catch (err) {
-        console.error('Supabase transformer write error:', err);
-      }
+    if (isBackendConnected) {
+      await api.addTransformer(tReading);
     }
   };
 
@@ -346,12 +405,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((s) => (s.id === sectionId ? { ...s, dailyLimitKwh: newLimitKwh } : s))
     );
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('sections').update({ daily_limit_kwh: newLimitKwh }).eq('id', sectionId);
-      } catch (err) {
-        console.error('Supabase update limit error:', err);
-      }
+    if (isBackendConnected) {
+      await api.updateSectionLimit(sectionId, newLimitKwh);
     }
   };
 
@@ -363,22 +418,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((s) => (s.id === sectionId ? { ...s, meters: [...s.meters, newMeter] } : s))
     );
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('meters').insert({
-          section_id: sectionId,
-          meter_code: meterData.meterCode,
-          meter_name: meterData.meterName,
-          meter_type: meterData.meterType,
-          kwh_mf: meterData.kwhMf,
-          kvah_mf: meterData.kvahMf,
-          contract_demand_mf: meterData.contractDemandMf,
-          is_active: meterData.isActive,
-          notes: meterData.notes,
-        });
-      } catch (err) {
-        console.error('Supabase add meter error:', err);
-      }
+    if (isBackendConnected) {
+      await api.addMeter(sectionId, meterData);
     }
   };
 
@@ -393,19 +434,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const dbUpdates: any = {};
-        if (updates.meterCode) dbUpdates.meter_code = updates.meterCode;
-        if (updates.meterName) dbUpdates.meter_name = updates.meterName;
-        if (updates.kwhMf !== undefined) dbUpdates.kwh_mf = updates.kwhMf;
-        if (updates.kvahMf !== undefined) dbUpdates.kvah_mf = updates.kvahMf;
-        if (updates.contractDemandMf !== undefined) dbUpdates.contract_demand_mf = updates.contractDemandMf;
-        if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
-        await supabase.from('meters').update(dbUpdates).eq('id', meterId);
-      } catch (err) {
-        console.error('Supabase update meter error:', err);
-      }
+    if (isBackendConnected) {
+      await api.updateMeter(sectionId, meterId, updates);
     }
   };
 
@@ -418,20 +448,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setCostSettings(updated);
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('cost_settings').insert({
-          rate_per_kwh: updated.ratePerKwh,
-          effective_date: updated.effectiveDate,
-          demand_charge_per_kva: updated.demandChargePerKva,
-          fixed_monthly_charges: updated.fixedMonthlyCharges,
-          tax_rate_percent: updated.taxRatePercent,
-          fuel_adjustment_charge_per_kwh: updated.fuelAdjustmentChargePerKwh,
-          updated_by: updated.updatedBy,
-        });
-      } catch (err) {
-        console.error('Supabase cost update error:', err);
-      }
+    if (isBackendConnected) {
+      await api.updateCosting(updated);
     }
   };
 
@@ -445,33 +463,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setEnquiries((prev) => [newEnquiry, ...prev]);
 
-    // Update alert status to enquiry_sent
     if (enquiryData.alertId) {
       setAlerts((prev) =>
         prev.map((a) => (a.id === enquiryData.alertId ? { ...a, status: 'enquiry_sent' } : a))
       );
     }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('enquiries').insert({
-          alert_id: enquiryData.alertId,
-          section_id: enquiryData.sectionId,
-          section_name: enquiryData.sectionName,
-          enquiry_date: enquiryData.date,
-          consumed_kwh: enquiryData.consumedKwh,
-          limit_kwh: enquiryData.limitKwh,
-          exceeded_kwh: enquiryData.exceededKwh,
-          subject: enquiryData.subject,
-          message: enquiryData.message,
-          sent_by: enquiryData.sentBy,
-          sent_by_email: enquiryData.sentByEmail,
-          sent_to: enquiryData.sentTo,
-          sent_to_email: enquiryData.sentToEmail,
-        });
-      } catch (err) {
-        console.error('Supabase send enquiry error:', err);
-      }
+    if (isBackendConnected) {
+      await api.sendEnquiry(enquiryData);
     }
   };
 
@@ -491,20 +490,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('enquiries')
-          .update({
-            reply_message: replyMessage,
-            replied_by: currentUser.fullName,
-            replied_at: repliedAt,
-            status: 'resolved',
-          })
-          .eq('id', enquiryId);
-      } catch (err) {
-        console.error('Supabase reply error:', err);
-      }
+    if (isBackendConnected) {
+      await api.replyEnquiry(enquiryId, replyMessage, currentUser.fullName);
     }
   };
 
@@ -513,12 +500,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((a) => (a.id === alertId ? { ...a, status: 'resolved' } : a))
     );
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('consumption_alerts').update({ status: 'resolved' }).eq('id', alertId);
-      } catch (err) {
-        console.error('Supabase resolve alert error:', err);
-      }
+    if (isBackendConnected) {
+      await api.resolveAlert(alertId);
     }
   };
 
@@ -546,7 +529,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         enquiries,
         costSettings,
         isLoading,
-        isSupabaseLive: isSupabaseConfigured,
+        isBackendConnected,
         addDailyReading,
         addTransformerReading,
         updateSectionLimit,

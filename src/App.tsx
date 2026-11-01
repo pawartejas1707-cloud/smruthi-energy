@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppProvider, useApp } from './context/AppContext';
+import { AppProvider } from './context/AppContext';
 import { Header } from './components/layout/Header';
 import { Sidebar, ActiveTab } from './components/layout/Sidebar';
 import { RoleBanner } from './components/layout/RoleBanner';
@@ -13,17 +13,17 @@ import { HistoricalReports } from './components/reports/HistoricalReports';
 import { AlertCenter } from './components/alerts/AlertCenter';
 import { CostSettingsView } from './components/costing/CostSettings';
 import { DatabaseView } from './components/database/DatabaseView';
-import { SupabaseConfigModal } from './components/auth/SupabaseConfigModal';
+import { MongoConfigModal } from './components/auth/MongoConfigModal';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isMongoModalOpen, setIsMongoModalOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-cyan-500/20 selection:text-cyan-200">
       {/* Top Navigation Header */}
       <Header
-        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        onOpenMongoModal={() => setIsMongoModalOpen(true)}
         onOpenAlerts={() => setActiveTab('alerts')}
       />
 
@@ -83,16 +83,16 @@ const AppContent: React.FC = () => {
 
           {activeTab === 'database' && (
             <div className="max-w-7xl mx-auto">
-              <DatabaseView onOpenConfigModal={() => setIsSupabaseModalOpen(true)} />
+              <DatabaseView onOpenConfigModal={() => setIsMongoModalOpen(true)} />
             </div>
           )}
         </main>
       </div>
 
-      {/* 1-Click Supabase Config Modal */}
-      <SupabaseConfigModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => setIsSupabaseModalOpen(false)}
+      {/* MongoDB Atlas & Render Configuration Modal */}
+      <MongoConfigModal
+        isOpen={isMongoModalOpen}
+        onClose={() => setIsMongoModalOpen(false)}
       />
     </div>
   );
