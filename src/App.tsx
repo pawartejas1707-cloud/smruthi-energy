@@ -15,6 +15,7 @@ import { CostSettingsView } from './components/costing/CostSettings';
 import { DatabaseView } from './components/database/DatabaseView';
 import { MongoConfigModal } from './components/auth/MongoConfigModal';
 import { OperatorPortal } from './components/operator/OperatorPortal';
+import { PlantAdminPortal } from './components/plantAdmin/PlantAdminPortal';
 
 const AppContent: React.FC = () => {
   const { currentRole } = useApp();
@@ -27,6 +28,14 @@ const AppContent: React.FC = () => {
   // No Admin Dashboard, No Summary Cards, No Share Market Graph, No Costing, No Alert tickets.
   if (currentRole === 'reading_operator') {
     return <OperatorPortal />;
+  }
+
+  // USER 2: PLANT ADMIN (HEAD OF FACTORY) DEDICATED INDUSTRIAL LIGHT THEME INTERFACE
+  // Simplified executive view: KPIs, Consumption Trend, 21 Sections with Day/Week/Month/Year filters,
+  // Transformers & Substation, 21 Sections Directory, Alerts & Enquiries.
+  // NO Daily readings entry, NO Historical reports, NO Supabase/Deploy, NO Costing, NO Capacity Headroom.
+  if (currentRole === 'plant_admin') {
+    return <PlantAdminPortal />;
   }
 
   return (

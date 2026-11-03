@@ -232,7 +232,7 @@ export const ConsumptionChart: React.FC = () => {
           <div className="flex items-center gap-2">
             <Activity className="w-5 h-5 text-cyan-400" />
             <h2 className="text-base lg:text-lg font-bold text-white tracking-tight">
-              Share-Market Industrial Consumption Trend
+              Consumption Trend
             </h2>
             <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 text-[11px] font-semibold border border-cyan-800">
               Live Feed

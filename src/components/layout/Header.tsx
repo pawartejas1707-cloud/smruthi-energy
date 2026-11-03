@@ -104,26 +104,28 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMongoModal, onOpenAlerts }
             <span className="text-amber-400 font-medium">Shift 1 (08:00 - 16:00)</span>
           </div>
 
-          {/* Database / Backend Status Pill */}
-          <button
-            onClick={onOpenMongoModal}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-              isBackendConnected
-                ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-400 hover:bg-emerald-900/40'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
-            }`}
-            title="MongoDB Atlas & Render Backend Status"
-          >
-            <Database className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">
-              {isBackendConnected ? 'MongoDB Live' : 'MongoDB / Render Setup'}
-            </span>
-            <div
-              className={`w-2 h-2 rounded-full ${
-                isBackendConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+          {/* Database / Backend Status Pill (Hidden for Plant Admin) */}
+          {currentRole !== 'plant_admin' && (
+            <button
+              onClick={onOpenMongoModal}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                isBackendConnected
+                  ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-400 hover:bg-emerald-900/40'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
               }`}
-            />
-          </button>
+              title="MongoDB Atlas & Render Backend Status"
+            >
+              <Database className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">
+                {isBackendConnected ? 'MongoDB Live' : 'MongoDB / Render Setup'}
+              </span>
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  isBackendConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
+            </button>
+          )}
 
           {/* Active Alerts Bell */}
           <button

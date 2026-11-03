@@ -28,16 +28,16 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
-  const { alerts, enquiries } = useApp();
+  const { alerts, enquiries, currentRole } = useApp();
 
   const activeAlertsCount = alerts.filter((a) => a.status === 'active').length;
   const pendingEnquiriesCount = enquiries.filter((e) => e.status === 'pending').length;
 
-  const navItems = [
+  const rawNavItems = [
     {
       id: 'dashboard' as ActiveTab,
       label: 'Admin Dashboard',
-      description: 'Summary cards, market graph & sections',
+      description: 'Summary cards, consumption trend & sections',
       icon: LayoutDashboard,
     },
     {
@@ -84,6 +84,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       icon: Database,
     },
   ];
+
+  // For Plant Admin: exclude readings, reports, database, and costing
+  const navItems = rawNavItems.filter((item) => {
+    if (currentRole === 'plant_admin') {
+      return (
+        item.id !== 'readings' &&
+        item.id !== 'reports' &&
+        item.id !== 'database' &&
+        item.id !== 'costing'
+      );
+    }
+    return true;
+  });
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 select-none">

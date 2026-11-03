@@ -215,10 +215,23 @@ export const SectionGrid: React.FC<SectionGridProps> = ({ onSelectSection }) => 
                 </div>
               ) : (
                 <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                  <span>Capacity Headroom:</span>
-                  <span className="text-emerald-400">
-                    {formatUnits(Math.max(0, section.dailyLimitKwh - consumedKwh))} kWh
-                  </span>
+                  {currentRole === 'plant_admin' ? (
+                    <>
+                      <span className="text-emerald-400 font-sans font-medium flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3 text-emerald-500" /> Normal Operation
+                      </span>
+                      <span className="text-slate-400 font-sans">
+                        {percentageUsed}% of limit
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Capacity Headroom:</span>
+                      <span className="text-emerald-400">
+                        {formatUnits(Math.max(0, section.dailyLimitKwh - consumedKwh))} kWh
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
             </div>
