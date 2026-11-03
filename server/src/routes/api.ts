@@ -113,36 +113,40 @@ router.post('/readings', async (req, res) => {
     await reading.save();
 
     // Check section limit violation and create alert if necessary
-    const sec = await SectionModel.findById(reading.sectionId);
-    if (sec) {
-      const todaySecReadings = await MeterReadingModel.find({
-        date: reading.date,
-        sectionId: reading.sectionId,
-      });
-      const totalConsumed = todaySecReadings.reduce((sum, r) => sum + r.consumedKwh, 0);
-
-      if (totalConsumed > sec.dailyLimitKwh) {
-        const exceededKwh = Number((totalConsumed - sec.dailyLimitKwh).toFixed(1));
-        const exceededPercentage = Number(((exceededKwh / sec.dailyLimitKwh) * 100).toFixed(1));
-
-        const existingAlert = await AlertModel.findOne({
+    try {
+      const sec = await findSection(reading.sectionId);
+      if (sec) {
+        const todaySecReadings = await MeterReadingModel.find({
           date: reading.date,
-          sectionId: sec._id.toString(),
+          sectionId: reading.sectionId,
         });
+        const totalConsumed = todaySecReadings.reduce((sum, r) => sum + r.consumedKwh, 0);
 
-        if (!existingAlert) {
-          await AlertModel.create({
+        if (totalConsumed > sec.dailyLimitKwh) {
+          const exceededKwh = Number((totalConsumed - sec.dailyLimitKwh).toFixed(1));
+          const exceededPercentage = Number(((exceededKwh / sec.dailyLimitKwh) * 100).toFixed(1));
+
+          const existingAlert = await AlertModel.findOne({
             date: reading.date,
             sectionId: sec._id.toString(),
-            sectionName: sec.name,
-            limitKwh: sec.dailyLimitKwh,
-            consumedKwh: Number(totalConsumed.toFixed(1)),
-            exceededKwh,
-            exceededPercentage,
-            status: 'active',
           });
+
+          if (!existingAlert) {
+            await AlertModel.create({
+              date: reading.date,
+              sectionId: sec._id.toString(),
+              sectionName: sec.name,
+              limitKwh: sec.dailyLimitKwh,
+              consumedKwh: Number(totalConsumed.toFixed(1)),
+              exceededKwh,
+              exceededPercentage,
+              status: 'active',
+            });
+          }
         }
       }
+    } catch (alertErr) {
+      console.warn('Alert check warning:', alertErr);
     }
 
     res.status(201).json(reading);

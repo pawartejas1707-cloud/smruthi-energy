@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Zap,
   Save,
   Check,
   Building2,
   Cpu,
-  Clock,
-  Calendar,
-  User,
   Search,
   CheckCircle2,
   AlertCircle,
@@ -88,7 +85,11 @@ export const OperatorReadingEntry: React.FC = () => {
   // ----------------------------------------------------------------------
   // 1. 21 BLOCKS DATA PREPARATION (KWH ONLY — NO KVAH, NO POWER FACTOR)
   // ----------------------------------------------------------------------
-  const cachedDials = useMemo(() => getCachedDials(), [readings.length]);
+  // Local state tracking saved dials (initialized from localStorage cache)
+  const [savedDials, setSavedDials] = useState<Record<string, number>>(() => getCachedDials());
+
+  // Local state tracking user typed values
+  const [userTypedKwh, setUserTypedKwh] = useState<Record<string, number>>({});
 
   const blocksList = useMemo(() => {
     const list: Array<{
@@ -101,7 +102,7 @@ export const OperatorReadingEntry: React.FC = () => {
 
     sections.forEach((sec, sIdx) => {
       sec.meters.forEach((m) => {
-        // Find newest log for this meter sorted by full timestamp
+        // Find newest log for this meter sorted by timestamp
         const meterLogs = readings
           .filter((r) => r.meterId === m.id || r.meterCode === m.meterCode)
           .sort((a, b) => {
@@ -116,12 +117,12 @@ export const OperatorReadingEntry: React.FC = () => {
 
         const lastLog = meterLogs[0];
 
-        // Resolved dial: cached dial > newest reading > initial fallback
+        // Resolved dial: savedDials state > cached dial > latest reading > fallback 1000
         let resolvedPrev = 1000;
-        if (cachedDials[m.id] !== undefined) {
-          resolvedPrev = cachedDials[m.id];
-        } else if (cachedDials[m.meterCode] !== undefined) {
-          resolvedPrev = cachedDials[m.meterCode];
+        if (savedDials[m.id] !== undefined) {
+          resolvedPrev = savedDials[m.id];
+        } else if (savedDials[m.meterCode] !== undefined) {
+          resolvedPrev = savedDials[m.meterCode];
         } else if (lastLog) {
           resolvedPrev = lastLog.currKwh;
         }
@@ -137,100 +138,79 @@ export const OperatorReadingEntry: React.FC = () => {
     });
 
     return list;
-  }, [sections, readings, cachedDials]);
-
-  // Form input state per meter: { currKwh: number, savedPrev: number }
-  const [meterInputs, setMeterInputs] = useState<
-    Record<string, { currKwh: number; savedPrev: number }>
-  >({});
-
-  // Sync inputs with the latest previous readings on initial load or refresh
-  useEffect(() => {
-    setMeterInputs((prevInputs) => {
-      const updated: Record<string, { currKwh: number; savedPrev: number }> = { ...prevInputs };
-      blocksList.forEach((item) => {
-        // If this meter doesn't have an input yet, default currKwh = prevKwh so Difference is 0
-        if (!updated[item.meter.id]) {
-          updated[item.meter.id] = {
-            currKwh: item.prevKwh,
-            savedPrev: item.prevKwh,
-          };
-        }
-      });
-      return updated;
-    });
-  }, [blocksList]);
+  }, [sections, readings, savedDials]);
 
   const handleKwhChange = (meterId: string, value: number) => {
-    setMeterInputs((prev) => ({
+    setUserTypedKwh((prev) => ({
       ...prev,
-      [meterId]: {
-        ...(prev[meterId] || { currKwh: 0, savedPrev: 0 }),
-        currKwh: value,
-      },
+      [meterId]: value,
     }));
   };
 
   // Save single block reading
-  const handleSaveBlock = async (item: (typeof blocksList)[0]) => {
-    const inputs = meterInputs[item.meter.id];
-    if (!inputs) return;
-
-    const effectivePrev = inputs.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
-
-    if (inputs.currKwh < effectivePrev) {
+  const handleSaveBlock = async (item: (typeof blocksList)[0], currentKwhVal: number) => {
+    if (currentKwhVal < item.prevKwh) {
       alert(`Warning for ${item.section.name}: Current KWH cannot be lower than Previous KWH!`);
       return;
     }
 
-    const diffKwh = Number((inputs.currKwh - effectivePrev).toFixed(2));
+    const diffKwh = Number((currentKwhVal - item.prevKwh).toFixed(2));
     const consumedKwh = Number((diffKwh * item.kwhMf).toFixed(2));
 
-    await addDailyReading({
-      date: readingDate,
-      time: readingTime,
-      sectionId: item.section.id,
-      meterId: item.meter.id,
-      meterCode: item.meter.meterCode,
-      meterName: item.meter.meterName,
-      prevKwh: effectivePrev,
-      currKwh: inputs.currKwh,
-      kwhMf: item.kwhMf,
-      consumedKwh,
-      prevKvah: 0,
-      currKvah: 0,
-      kvahMf: item.meter.kvahMf || 1,
-      consumedKvah: 0,
-      powerFactor: 0.98,
-      prevDemand: 0,
-      currDemand: 0,
-      demandMf: item.meter.contractDemandMf || 1,
-      calculatedDemand: 0,
-      operatorName,
-      shift,
+    // 1. Immediately cache the new dial to localStorage
+    saveCachedDial(item.meter.id, item.meter.meterCode, currentKwhVal);
+
+    // 2. Immediately update local saved dials state so prevKwh becomes currentKwhVal, Difference becomes 0
+    setSavedDials((prev) => ({
+      ...prev,
+      [item.meter.id]: currentKwhVal,
+      [item.meter.meterCode]: currentKwhVal,
+    }));
+
+    // 3. Clear userTyped state for this meter so it locks back to "Saved"
+    setUserTypedKwh((prev) => {
+      const next = { ...prev };
+      delete next[item.meter.id];
+      return next;
     });
 
-    // Save to permanent localStorage cache
-    saveCachedDial(item.meter.id, item.meter.meterCode, inputs.currKwh);
-
-    // Update state immediately: previous becomes current, difference becomes 0, button turns to "Saved"
-    setMeterInputs((prev) => ({
-      ...prev,
-      [item.meter.id]: {
-        currKwh: inputs.currKwh,
-        savedPrev: inputs.currKwh,
-      },
-    }));
+    // 4. Persist to AppContext & backend safely
+    try {
+      await addDailyReading({
+        date: readingDate,
+        time: readingTime,
+        sectionId: item.section.id,
+        meterId: item.meter.id,
+        meterCode: item.meter.meterCode,
+        meterName: item.meter.meterName,
+        prevKwh: item.prevKwh,
+        currKwh: currentKwhVal,
+        kwhMf: item.kwhMf,
+        consumedKwh,
+        prevKvah: 0,
+        currKvah: 0,
+        kvahMf: item.meter.kvahMf || 1,
+        consumedKvah: 0,
+        powerFactor: 0.98,
+        prevDemand: 0,
+        currDemand: 0,
+        demandMf: item.meter.contractDemandMf || 1,
+        calculatedDemand: 0,
+        operatorName,
+        shift,
+      });
+    } catch (err) {
+      console.warn('Background sync warning:', err);
+    }
   };
 
   // Save all entered blocks that have changed
   const [saveAllSuccess, setSaveAllSuccess] = useState(false);
   const handleSaveAllBlocks = async () => {
     for (const item of blocksList) {
-      const inputs = meterInputs[item.meter.id];
-      const effectivePrev = inputs?.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
-      if (inputs && inputs.currKwh > effectivePrev) {
-        await handleSaveBlock(item);
+      const typedVal = userTypedKwh[item.meter.id];
+      if (typedVal !== undefined && typedVal > item.prevKwh) {
+        await handleSaveBlock(item, typedVal);
       }
     }
     setSaveAllSuccess(true);
@@ -253,11 +233,10 @@ export const OperatorReadingEntry: React.FC = () => {
   // Count how many blocks have pending new readings
   const pendingBlocksCount = useMemo(() => {
     return blocksList.filter((item) => {
-      const inputs = meterInputs[item.meter.id];
-      const effectivePrev = inputs?.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
-      return inputs && inputs.currKwh > effectivePrev;
+      const typedVal = userTypedKwh[item.meter.id];
+      return typedVal !== undefined && typedVal > item.prevKwh;
     }).length;
-  }, [blocksList, meterInputs]);
+  }, [blocksList, userTypedKwh]);
 
   // ----------------------------------------------------------------------
   // 2. MAIN INCOMER (KWH & KVAH) + TRANSFORMERS (750 & 950 KVA)
@@ -265,47 +244,42 @@ export const OperatorReadingEntry: React.FC = () => {
   const cachedTDials = useMemo(() => getCachedTransformerDials(), [transformerReadings.length]);
   const lastTransformer = transformerReadings[0];
 
-  // Incomer KWH
-  const initialMainKwh =
-    cachedTDials?.mainKwh !== undefined
-      ? cachedTDials.mainKwh
-      : lastTransformer?.mainKwhCurr || lastTransformer?.mainKwhUnits || 25050;
-  const [mainKwhPrev, setMainKwhPrev] = useState<number>(initialMainKwh);
-  const [mainKwhCurr, setMainKwhCurr] = useState<number>(initialMainKwh);
+  const [savedTDials, setSavedTDials] = useState<{
+    mainKwh: number;
+    mainKvah: number;
+    t750: number;
+    t950: number;
+  }>(() => {
+    const cached = getCachedTransformerDials();
+    return {
+      mainKwh: cached?.mainKwh ?? (lastTransformer?.mainKwhCurr || lastTransformer?.mainKwhUnits || 25050),
+      mainKvah: cached?.mainKvah ?? (lastTransformer?.mainKvahCurr || 25600),
+      t750: cached?.t750 ?? (lastTransformer?.t750Curr || 12300),
+      t950: cached?.t950 ?? (lastTransformer?.t950Curr || 15310),
+    };
+  });
 
-  // Incomer KVAH
-  const initialMainKvah =
-    cachedTDials?.mainKvah !== undefined
-      ? cachedTDials.mainKvah
-      : lastTransformer?.mainKvahCurr || 25600;
-  const [mainKvahPrev, setMainKvahPrev] = useState<number>(initialMainKvah);
-  const [mainKvahCurr, setMainKvahCurr] = useState<number>(initialMainKvah);
+  // User typed inputs for transformer section
+  const [typedMainKwh, setTypedMainKwh] = useState<number | undefined>(undefined);
+  const [typedMainKvah, setTypedMainKvah] = useState<number | undefined>(undefined);
+  const [typed750, setTyped750] = useState<number | undefined>(undefined);
+  const [typed950, setTyped950] = useState<number | undefined>(undefined);
 
-  // 750 KVA Transformer
-  const initial750 =
-    cachedTDials?.t750 !== undefined
-      ? cachedTDials.t750
-      : lastTransformer?.t750Curr || 12300;
-  const [t750Prev, setT750Prev] = useState<number>(initial750);
-  const [t750Curr, setT750Curr] = useState<number>(initial750);
+  const mainKwhVal = typedMainKwh !== undefined ? typedMainKwh : savedTDials.mainKwh;
+  const mainKvahVal = typedMainKvah !== undefined ? typedMainKvah : savedTDials.mainKvah;
+  const t750Val = typed750 !== undefined ? typed750 : savedTDials.t750;
+  const t950Val = typed950 !== undefined ? typed950 : savedTDials.t950;
+
   const t750Mf = lastTransformer?.t750Mf || 40;
-
-  // 950 KVA Transformer
-  const initial950 =
-    cachedTDials?.t950 !== undefined
-      ? cachedTDials.t950
-      : lastTransformer?.t950Curr || 15310;
-  const [t950Prev, setT950Prev] = useState<number>(initial950);
-  const [t950Curr, setT950Curr] = useState<number>(initial950);
   const t950Mf = lastTransformer?.t950Mf || 40;
 
   const [tSaveSuccess, setTSaveSuccess] = useState(false);
 
   // Differences calculated live
-  const mainKwhDiff = Number((mainKwhCurr - mainKwhPrev).toFixed(2));
-  const mainKvahDiff = Number((mainKvahCurr - mainKvahPrev).toFixed(2));
-  const t750Diff = Number((t750Curr - t750Prev).toFixed(2));
-  const t950Diff = Number((t950Curr - t950Prev).toFixed(2));
+  const mainKwhDiff = Number((mainKwhVal - savedTDials.mainKwh).toFixed(2));
+  const mainKvahDiff = Number((mainKvahVal - savedTDials.mainKvah).toFixed(2));
+  const t750Diff = Number((t750Val - savedTDials.t750).toFixed(2));
+  const t950Diff = Number((t950Val - savedTDials.t950).toFixed(2));
 
   // Is there any new reading entered for transformer section?
   const hasTransformerChanged =
@@ -318,52 +292,65 @@ export const OperatorReadingEntry: React.FC = () => {
     const t750Units = Math.max(0, Number((t750Diff * t750Mf).toFixed(1)));
     const t950Units = Math.max(0, Number((t950Diff * t950Mf).toFixed(1)));
     const totalOutputUnits = Number((t750Units + t950Units).toFixed(1));
-    const transformerLosses = Number((mainKwhCurr - totalOutputUnits).toFixed(1));
+    const transformerLosses = Number((mainKwhVal - totalOutputUnits).toFixed(1));
     const lossPercentage =
-      mainKwhCurr > 0 ? Number(((transformerLosses / mainKwhCurr) * 100).toFixed(2)) : 0;
+      mainKwhVal > 0 ? Number(((transformerLosses / mainKwhVal) * 100).toFixed(2)) : 0;
 
-    await addTransformerReading({
-      date: readingDate,
-      time: readingTime,
-      mainKwhUnits: mainKwhCurr,
-      mainKvahUnits: mainKvahCurr,
-      mainKwhPrev,
-      mainKwhCurr,
-      mainKvahPrev,
-      mainKvahCurr,
-      t750Prev,
-      t750Curr,
-      t750Mf,
-      t750Units,
-      t950Prev,
-      t950Curr,
-      t950Mf,
-      t950Units,
-      totalOutputUnits,
-      transformerLosses,
-      lossPercentage,
-      operatorName,
-      notes: 'Shift main incomer & transformer reading',
-    });
-
-    // Cache permanently to localStorage
+    // 1. Immediately cache to permanent localStorage
     saveCachedTransformerDials({
-      mainKwh: mainKwhCurr,
-      mainKvah: mainKvahCurr,
-      t750: t750Curr,
-      t950: t950Curr,
+      mainKwh: mainKwhVal,
+      mainKvah: mainKvahVal,
+      t750: t750Val,
+      t950: t950Val,
     });
 
-    // Immediately advance previous dials to current so Difference becomes 0 and button shows "Saved"
-    setMainKwhPrev(mainKwhCurr);
-    setMainKvahPrev(mainKvahCurr);
-    setT750Prev(t750Curr);
-    setT950Prev(t950Curr);
+    // 2. Immediately update saved state: previous becomes current, difference becomes 0, button turns to "Saved"
+    setSavedTDials({
+      mainKwh: mainKwhVal,
+      mainKvah: mainKvahVal,
+      t750: t750Val,
+      t950: t950Val,
+    });
+
+    // 3. Clear typed inputs
+    setTypedMainKwh(undefined);
+    setTypedMainKvah(undefined);
+    setTyped750(undefined);
+    setTyped950(undefined);
 
     setTSaveSuccess(true);
     setTimeout(() => {
       setTSaveSuccess(false);
     }, 2500);
+
+    // 4. Persist to AppContext & backend safely
+    try {
+      await addTransformerReading({
+        date: readingDate,
+        time: readingTime,
+        mainKwhUnits: mainKwhVal,
+        mainKvahUnits: mainKvahVal,
+        mainKwhPrev: savedTDials.mainKwh,
+        mainKwhCurr: mainKwhVal,
+        mainKvahPrev: savedTDials.mainKvah,
+        mainKvahCurr: mainKvahVal,
+        t750Prev: savedTDials.t750,
+        t750Curr: t750Val,
+        t750Mf,
+        t750Units,
+        t950Prev: savedTDials.t950,
+        t950Curr: t950Val,
+        t950Mf,
+        t950Units,
+        totalOutputUnits,
+        transformerLosses,
+        lossPercentage,
+        operatorName,
+        notes: 'Shift main incomer & transformer reading',
+      });
+    } catch (err) {
+      console.warn('Transformer reading sync warning:', err);
+    }
   };
 
   return (
@@ -519,14 +506,11 @@ export const OperatorReadingEntry: React.FC = () => {
           {/* Blockwise List: KWH ONLY */}
           <div className="grid grid-cols-1 gap-2.5">
             {filteredBlocks.map((item) => {
-              const inputs = meterInputs[item.meter.id];
-              const effectivePrev =
-                inputs?.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
-              const currentVal =
-                inputs?.currKwh !== undefined ? inputs.currKwh : effectivePrev;
+              const typedVal = userTypedKwh[item.meter.id];
+              const currentVal = typedVal !== undefined ? typedVal : item.prevKwh;
 
-              const diffKwh = Number((currentVal - effectivePrev).toFixed(2));
-              const isKwhWarning = currentVal < effectivePrev;
+              const diffKwh = Number((currentVal - item.prevKwh).toFixed(2));
+              const isKwhWarning = currentVal < item.prevKwh;
               const hasNewReading = diffKwh > 0;
 
               return (
@@ -564,7 +548,7 @@ export const OperatorReadingEntry: React.FC = () => {
                           Prev KWH (Ref)
                         </span>
                         <span className="font-mono font-black text-sm text-blue-950">
-                          {effectivePrev}
+                          {item.prevKwh}
                         </span>
                       </div>
 
@@ -603,17 +587,17 @@ export const OperatorReadingEntry: React.FC = () => {
                               : 'text-red-600'
                           }`}
                         >
-                          {diffKwh > 0 ? `+${diffKwh}` : diffKwh === 0 ? '0' : diffKwh}
+                          {diffKwh > 0 ? `+${diffKwh}` : '0'}
                         </span>
                       </div>
                     </div>
 
-                    {/* Right: Save Button or Saved Indicator */}
+                    {/* Right: Solid Button (Blue "Save Block" if changed, Solid Green "Saved" if 0) */}
                     <div className="flex items-center justify-end shrink-0 min-w-[110px]">
                       {hasNewReading ? (
                         <button
                           type="button"
-                          onClick={() => handleSaveBlock(item)}
+                          onClick={() => handleSaveBlock(item, currentVal)}
                           disabled={isKwhWarning}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs transition-all shadow-sm bg-blue-600 hover:bg-blue-700 text-white animate-in fade-in"
                         >
@@ -621,10 +605,14 @@ export const OperatorReadingEntry: React.FC = () => {
                           <span>Save Block</span>
                         </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <Check className="w-4 h-4 text-emerald-600" />
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs bg-emerald-600 text-white shadow-sm cursor-default"
+                        >
+                          <Check className="w-4 h-4" />
                           <span>Saved</span>
-                        </span>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -632,7 +620,7 @@ export const OperatorReadingEntry: React.FC = () => {
                   {isKwhWarning && (
                     <div className="mt-2 text-xs text-red-600 font-semibold flex items-center gap-1">
                       <AlertCircle className="w-3.5 h-3.5" />
-                      <span>Current KWH reading cannot be lower than Previous KWH ({effectivePrev})!</span>
+                      <span>Current KWH reading cannot be lower than Previous KWH ({item.prevKwh})!</span>
                     </div>
                   )}
                 </div>
@@ -691,7 +679,7 @@ export const OperatorReadingEntry: React.FC = () => {
                       Previous KWH (Ref)
                     </span>
                     <span className="font-mono font-black text-base text-blue-950">
-                      {mainKwhPrev}
+                      {savedTDials.mainKwh}
                     </span>
                   </div>
 
@@ -703,8 +691,8 @@ export const OperatorReadingEntry: React.FC = () => {
                       type="number"
                       step="0.01"
                       required
-                      value={mainKwhCurr}
-                      onChange={(e) => setMainKwhCurr(parseFloat(e.target.value) || 0)}
+                      value={mainKwhVal}
+                      onChange={(e) => setTypedMainKwh(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 bg-white text-xs focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -738,7 +726,7 @@ export const OperatorReadingEntry: React.FC = () => {
                       Previous KVAH (Ref)
                     </span>
                     <span className="font-mono font-black text-base text-cyan-950">
-                      {mainKvahPrev}
+                      {savedTDials.mainKvah}
                     </span>
                   </div>
 
@@ -750,8 +738,8 @@ export const OperatorReadingEntry: React.FC = () => {
                       type="number"
                       step="0.01"
                       required
-                      value={mainKvahCurr}
-                      onChange={(e) => setMainKvahCurr(parseFloat(e.target.value) || 0)}
+                      value={mainKvahVal}
+                      onChange={(e) => setTypedMainKvah(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 bg-white text-xs focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -792,7 +780,7 @@ export const OperatorReadingEntry: React.FC = () => {
                       Previous Dial (Ref)
                     </span>
                     <span className="font-mono font-black text-base text-blue-950">
-                      {t750Prev}
+                      {savedTDials.t750}
                     </span>
                   </div>
 
@@ -804,8 +792,8 @@ export const OperatorReadingEntry: React.FC = () => {
                       type="number"
                       step="0.01"
                       required
-                      value={t750Curr}
-                      onChange={(e) => setT750Curr(parseFloat(e.target.value) || 0)}
+                      value={t750Val}
+                      onChange={(e) => setTyped750(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 bg-white text-xs focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -836,7 +824,7 @@ export const OperatorReadingEntry: React.FC = () => {
                       Previous Dial (Ref)
                     </span>
                     <span className="font-mono font-black text-base text-blue-950">
-                      {t950Prev}
+                      {savedTDials.t950}
                     </span>
                   </div>
 
@@ -848,8 +836,8 @@ export const OperatorReadingEntry: React.FC = () => {
                       type="number"
                       step="0.01"
                       required
-                      value={t950Curr}
-                      onChange={(e) => setT950Curr(parseFloat(e.target.value) || 0)}
+                      value={t950Val}
+                      onChange={(e) => setTyped950(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 bg-white text-xs focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -880,10 +868,14 @@ export const OperatorReadingEntry: React.FC = () => {
                   <span>Save Main Incomer & Transformer Readings</span>
                 </button>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Check className="w-4 h-4 text-emerald-600" />
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-md shadow-emerald-500/20 cursor-default"
+                >
+                  <Check className="w-4 h-4" />
                   <span>Saved</span>
-                </span>
+                </button>
               )}
             </div>
           </form>

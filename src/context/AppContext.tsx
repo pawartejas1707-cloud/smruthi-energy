@@ -396,7 +396,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (isBackendConnected) {
-      await api.addReading(reading);
+      try {
+        await api.addReading(reading);
+      } catch (err) {
+        console.warn('API addReading error:', err);
+      }
     }
   };
 
@@ -422,7 +426,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {}
 
     if (isBackendConnected) {
-      await api.addTransformer(tReading);
+      try {
+        await api.addTransformer(tReading);
+      } catch (err) {
+        console.warn('API addTransformer error:', err);
+      }
     }
   };
 
