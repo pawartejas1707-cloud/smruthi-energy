@@ -4,6 +4,11 @@ export interface ITransformerReading extends Document {
   date: string; // YYYY-MM-DD
   time: string;
   mainKwhUnits: number;
+  mainKvahUnits?: number;
+  mainKwhPrev?: number;
+  mainKwhCurr?: number;
+  mainKvahPrev?: number;
+  mainKvahCurr?: number;
 
   t750Prev: number;
   t750Curr: number;
@@ -29,6 +34,11 @@ const TransformerReadingSchema = new Schema<ITransformerReading>(
     date: { type: String, required: true, unique: true, index: true },
     time: { type: String, default: '08:30' },
     mainKwhUnits: { type: Number, required: true },
+    mainKvahUnits: { type: Number },
+    mainKwhPrev: { type: Number },
+    mainKwhCurr: { type: Number },
+    mainKvahPrev: { type: Number },
+    mainKvahCurr: { type: Number },
 
     t750Prev: { type: Number, required: true },
     t750Curr: { type: Number, required: true },

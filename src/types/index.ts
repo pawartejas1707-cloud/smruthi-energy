@@ -75,6 +75,11 @@ export interface TransformerReading {
   date: string;
   time: string;
   mainKwhUnits: number; // Total Plant Main KWH Units
+  mainKvahUnits?: number; // Total Plant Main KVAH Units
+  mainKwhPrev?: number;
+  mainKwhCurr?: number;
+  mainKvahPrev?: number;
+  mainKvahCurr?: number;
   
   // 750 KVA Transformer
   t750Prev: number;
