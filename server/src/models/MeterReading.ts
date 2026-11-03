@@ -45,12 +45,12 @@ const MeterReadingSchema = new Schema<IMeterReading>(
     kwhMf: { type: Number, required: true, default: 1.0 },
     consumedKwh: { type: Number, required: true },
 
-    prevKvah: { type: Number, required: true },
-    currKvah: { type: Number, required: true },
-    kvahMf: { type: Number, required: true, default: 1.0 },
-    consumedKvah: { type: Number, required: true },
+    prevKvah: { type: Number, default: 0 },
+    currKvah: { type: Number, default: 0 },
+    kvahMf: { type: Number, default: 1.0 },
+    consumedKvah: { type: Number, default: 0 },
 
-    powerFactor: { type: Number, required: true, default: 0.95 },
+    powerFactor: { type: Number, default: 0.95 },
 
     prevDemand: { type: Number, default: 0 },
     currDemand: { type: Number, default: 0 },

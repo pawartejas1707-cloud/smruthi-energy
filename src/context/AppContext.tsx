@@ -350,6 +350,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setReadings((prev) => [fullReading, ...prev]);
 
+    // Cache latest dial immediately for permanent refresh persistence
+    try {
+      const latestCache = JSON.parse(localStorage.getItem('smruthi_latest_dials') || '{}');
+      latestCache[reading.meterId] = reading.currKwh;
+      if (reading.meterCode) latestCache[reading.meterCode] = reading.currKwh;
+      localStorage.setItem('smruthi_latest_dials', JSON.stringify(latestCache));
+    } catch (e) {}
+
     // Check section limit violation
     const sec = sections.find((s) => s.id === reading.sectionId);
     if (sec) {
@@ -401,6 +409,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setTransformerReadings((prev) => [full, ...prev]);
+
+    // Cache latest transformer dials immediately for refresh persistence
+    try {
+      const tCache = {
+        mainKwhCurr: tReading.mainKwhCurr || tReading.mainKwhUnits,
+        mainKvahCurr: tReading.mainKvahCurr || 0,
+        t750Curr: tReading.t750Curr,
+        t950Curr: tReading.t950Curr,
+      };
+      localStorage.setItem('smruthi_latest_transformer_dials', JSON.stringify(tCache));
+    } catch (e) {}
 
     if (isBackendConnected) {
       await api.addTransformer(tReading);

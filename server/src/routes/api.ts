@@ -99,7 +99,7 @@ router.get('/readings', async (req, res) => {
     if (meterId) query.meterId = meterId;
 
     const readings = await MeterReadingModel.find(query)
-      .sort({ date: -1, time: -1 })
+      .sort({ createdAt: -1, _id: -1, date: -1, time: -1 })
       .limit(Number(limit));
     res.json(readings);
   } catch (err: any) {
@@ -155,7 +155,7 @@ router.post('/readings', async (req, res) => {
 router.get('/transformers', async (req, res) => {
   try {
     const readings = await TransformerReadingModel.find()
-      .sort({ date: -1 })
+      .sort({ createdAt: -1, _id: -1, date: -1 })
       .limit(100);
     res.json(readings);
   } catch (err: any) {
@@ -165,8 +165,11 @@ router.get('/transformers', async (req, res) => {
 
 router.post('/transformers', async (req, res) => {
   try {
-    const reading = new TransformerReadingModel(req.body);
-    await reading.save();
+    const reading = await TransformerReadingModel.findOneAndUpdate(
+      { date: req.body.date },
+      req.body,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
     res.status(201).json(reading);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

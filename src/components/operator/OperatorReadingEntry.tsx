@@ -11,10 +11,53 @@ import {
   Search,
   CheckCircle2,
   AlertCircle,
-  Activity,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Section, Meter } from '../../types';
+
+// Storage cache helpers for instant persistence across browser refresh
+function getCachedDials(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem('smruthi_latest_dials');
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveCachedDial(meterId: string, meterCode: string, dial: number) {
+  try {
+    const dials = getCachedDials();
+    dials[meterId] = dial;
+    if (meterCode) dials[meterCode] = dial;
+    localStorage.setItem('smruthi_latest_dials', JSON.stringify(dials));
+  } catch (e) {}
+}
+
+function getCachedTransformerDials(): {
+  mainKwh?: number;
+  mainKvah?: number;
+  t750?: number;
+  t950?: number;
+} | null {
+  try {
+    const raw = localStorage.getItem('smruthi_latest_transformer_dials');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveCachedTransformerDials(data: {
+  mainKwh: number;
+  mainKvah: number;
+  t750: number;
+  t950: number;
+}) {
+  try {
+    localStorage.setItem('smruthi_latest_transformer_dials', JSON.stringify(data));
+  } catch (e) {}
+}
 
 export const OperatorReadingEntry: React.FC = () => {
   const {
@@ -43,8 +86,10 @@ export const OperatorReadingEntry: React.FC = () => {
   const [searchFilter, setSearchFilter] = useState<string>('');
 
   // ----------------------------------------------------------------------
-  // 1. 21 BLOCKS DATA (KWH ONLY — NO KVAH, NO POWER FACTOR)
+  // 1. 21 BLOCKS DATA PREPARATION (KWH ONLY — NO KVAH, NO POWER FACTOR)
   // ----------------------------------------------------------------------
+  const cachedDials = useMemo(() => getCachedDials(), [readings.length]);
+
   const blocksList = useMemo(() => {
     const list: Array<{
       sectionIndex: number;
@@ -52,71 +97,93 @@ export const OperatorReadingEntry: React.FC = () => {
       meter: Meter;
       prevKwh: number;
       kwhMf: number;
-      lastDate: string;
     }> = [];
 
     sections.forEach((sec, sIdx) => {
       sec.meters.forEach((m) => {
-        const lastLog = readings
+        // Find newest log for this meter sorted by full timestamp
+        const meterLogs = readings
           .filter((r) => r.meterId === m.id || r.meterCode === m.meterCode)
-          .sort(
-            (a, b) =>
-              new Date(b.date + ' ' + b.time).getTime() - new Date(a.date + ' ' + a.time).getTime()
-          )[0];
+          .sort((a, b) => {
+            const tA = a.createdAt
+              ? new Date(a.createdAt).getTime()
+              : new Date(`${a.date} ${a.time || '00:00'}`).getTime();
+            const tB = b.createdAt
+              ? new Date(b.createdAt).getTime()
+              : new Date(`${b.date} ${b.time || '00:00'}`).getTime();
+            return tB - tA;
+          });
+
+        const lastLog = meterLogs[0];
+
+        // Resolved dial: cached dial > newest reading > initial fallback
+        let resolvedPrev = 1000;
+        if (cachedDials[m.id] !== undefined) {
+          resolvedPrev = cachedDials[m.id];
+        } else if (cachedDials[m.meterCode] !== undefined) {
+          resolvedPrev = cachedDials[m.meterCode];
+        } else if (lastLog) {
+          resolvedPrev = lastLog.currKwh;
+        }
 
         list.push({
           sectionIndex: sIdx + 1,
           section: sec,
           meter: m,
-          prevKwh: lastLog ? lastLog.currKwh : 1000,
+          prevKwh: resolvedPrev,
           kwhMf: m.kwhMf || 1,
-          lastDate: lastLog ? `${lastLog.date} ${lastLog.time}` : 'Initial Dial',
         });
       });
     });
 
     return list;
-  }, [sections, readings]);
+  }, [sections, readings, cachedDials]);
 
-  // Form input state per meter: { currKwh, saved: boolean }
+  // Form input state per meter: { currKwh: number, savedPrev: number }
   const [meterInputs, setMeterInputs] = useState<
-    Record<string, { currKwh: number; saved: boolean }>
+    Record<string, { currKwh: number; savedPrev: number }>
   >({});
 
-  // Initialize input state with defaults
+  // Sync inputs with the latest previous readings on initial load or refresh
   useEffect(() => {
-    const initial: Record<string, { currKwh: number; saved: boolean }> = {};
-    blocksList.forEach((item) => {
-      initial[item.meter.id] = {
-        currKwh: Number((item.prevKwh + 15).toFixed(2)),
-        saved: false,
-      };
+    setMeterInputs((prevInputs) => {
+      const updated: Record<string, { currKwh: number; savedPrev: number }> = { ...prevInputs };
+      blocksList.forEach((item) => {
+        // If this meter doesn't have an input yet, default currKwh = prevKwh so Difference is 0
+        if (!updated[item.meter.id]) {
+          updated[item.meter.id] = {
+            currKwh: item.prevKwh,
+            savedPrev: item.prevKwh,
+          };
+        }
+      });
+      return updated;
     });
-    setMeterInputs(initial);
-  }, [blocksList.length]);
+  }, [blocksList]);
 
   const handleKwhChange = (meterId: string, value: number) => {
     setMeterInputs((prev) => ({
       ...prev,
       [meterId]: {
-        ...(prev[meterId] || { currKwh: 0, saved: false }),
+        ...(prev[meterId] || { currKwh: 0, savedPrev: 0 }),
         currKwh: value,
-        saved: false,
       },
     }));
   };
 
-  // Save single block KWH reading
+  // Save single block reading
   const handleSaveBlock = async (item: (typeof blocksList)[0]) => {
     const inputs = meterInputs[item.meter.id];
     if (!inputs) return;
 
-    if (inputs.currKwh < item.prevKwh) {
+    const effectivePrev = inputs.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
+
+    if (inputs.currKwh < effectivePrev) {
       alert(`Warning for ${item.section.name}: Current KWH cannot be lower than Previous KWH!`);
       return;
     }
 
-    const diffKwh = Number((inputs.currKwh - item.prevKwh).toFixed(2));
+    const diffKwh = Number((inputs.currKwh - effectivePrev).toFixed(2));
     const consumedKwh = Number((diffKwh * item.kwhMf).toFixed(2));
 
     await addDailyReading({
@@ -126,7 +193,7 @@ export const OperatorReadingEntry: React.FC = () => {
       meterId: item.meter.id,
       meterCode: item.meter.meterCode,
       meterName: item.meter.meterName,
-      prevKwh: item.prevKwh,
+      prevKwh: effectivePrev,
       currKwh: inputs.currKwh,
       kwhMf: item.kwhMf,
       consumedKwh,
@@ -134,7 +201,7 @@ export const OperatorReadingEntry: React.FC = () => {
       currKvah: 0,
       kvahMf: item.meter.kvahMf || 1,
       consumedKvah: 0,
-      powerFactor: 0.98, // Stored for admin reports
+      powerFactor: 0.98,
       prevDemand: 0,
       currDemand: 0,
       demandMf: item.meter.contractDemandMf || 1,
@@ -143,21 +210,26 @@ export const OperatorReadingEntry: React.FC = () => {
       shift,
     });
 
+    // Save to permanent localStorage cache
+    saveCachedDial(item.meter.id, item.meter.meterCode, inputs.currKwh);
+
+    // Update state immediately: previous becomes current, difference becomes 0, button turns to "Saved"
     setMeterInputs((prev) => ({
       ...prev,
       [item.meter.id]: {
-        ...prev[item.meter.id],
-        saved: true,
+        currKwh: inputs.currKwh,
+        savedPrev: inputs.currKwh,
       },
     }));
   };
 
-  // Save all entered blocks at once
+  // Save all entered blocks that have changed
   const [saveAllSuccess, setSaveAllSuccess] = useState(false);
   const handleSaveAllBlocks = async () => {
     for (const item of blocksList) {
       const inputs = meterInputs[item.meter.id];
-      if (inputs && !inputs.saved) {
+      const effectivePrev = inputs?.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
+      if (inputs && inputs.currKwh > effectivePrev) {
         await handleSaveBlock(item);
       }
     }
@@ -178,52 +250,66 @@ export const OperatorReadingEntry: React.FC = () => {
     );
   }, [blocksList, searchFilter]);
 
+  // Count how many blocks have pending new readings
+  const pendingBlocksCount = useMemo(() => {
+    return blocksList.filter((item) => {
+      const inputs = meterInputs[item.meter.id];
+      const effectivePrev = inputs?.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
+      return inputs && inputs.currKwh > effectivePrev;
+    }).length;
+  }, [blocksList, meterInputs]);
+
   // ----------------------------------------------------------------------
   // 2. MAIN INCOMER (KWH & KVAH) + TRANSFORMERS (750 & 950 KVA)
   // ----------------------------------------------------------------------
+  const cachedTDials = useMemo(() => getCachedTransformerDials(), [transformerReadings.length]);
   const lastTransformer = transformerReadings[0];
 
-  // 1. Main Incomer KWH
-  const [mainKwhPrev, setMainKwhPrev] = useState<number>(
-    lastTransformer?.mainKwhPrev || (lastTransformer ? lastTransformer.mainKwhUnits - 1000 : 24000)
-  );
-  const [mainKwhCurr, setMainKwhCurr] = useState<number>(
-    lastTransformer?.mainKwhCurr || (lastTransformer ? lastTransformer.mainKwhUnits : 25050)
-  );
+  // Incomer KWH
+  const initialMainKwh =
+    cachedTDials?.mainKwh !== undefined
+      ? cachedTDials.mainKwh
+      : lastTransformer?.mainKwhCurr || lastTransformer?.mainKwhUnits || 25050;
+  const [mainKwhPrev, setMainKwhPrev] = useState<number>(initialMainKwh);
+  const [mainKwhCurr, setMainKwhCurr] = useState<number>(initialMainKwh);
 
-  // 2. Main Incomer KVAH
-  const [mainKvahPrev, setMainKvahPrev] = useState<number>(
-    lastTransformer?.mainKvahPrev || 24500
-  );
-  const [mainKvahCurr, setMainKvahCurr] = useState<number>(
-    lastTransformer?.mainKvahCurr || 25600
-  );
+  // Incomer KVAH
+  const initialMainKvah =
+    cachedTDials?.mainKvah !== undefined
+      ? cachedTDials.mainKvah
+      : lastTransformer?.mainKvahCurr || 25600;
+  const [mainKvahPrev, setMainKvahPrev] = useState<number>(initialMainKvah);
+  const [mainKvahCurr, setMainKvahCurr] = useState<number>(initialMainKvah);
 
-  // 3. 750 KVA Transformer
-  const [t750Prev, setT750Prev] = useState<number>(
-    lastTransformer ? lastTransformer.t750Curr : 12000
-  );
-  const [t750Curr, setT750Curr] = useState<number>(
-    lastTransformer ? lastTransformer.t750Curr + 300 : 12300
-  );
-  const t750Mf = lastTransformer ? lastTransformer.t750Mf : 40;
+  // 750 KVA Transformer
+  const initial750 =
+    cachedTDials?.t750 !== undefined
+      ? cachedTDials.t750
+      : lastTransformer?.t750Curr || 12300;
+  const [t750Prev, setT750Prev] = useState<number>(initial750);
+  const [t750Curr, setT750Curr] = useState<number>(initial750);
+  const t750Mf = lastTransformer?.t750Mf || 40;
 
-  // 4. 950 KVA Transformer
-  const [t950Prev, setT950Prev] = useState<number>(
-    lastTransformer ? lastTransformer.t950Curr : 15000
-  );
-  const [t950Curr, setT950Curr] = useState<number>(
-    lastTransformer ? lastTransformer.t950Curr + 310 : 15310
-  );
-  const t950Mf = lastTransformer ? lastTransformer.t950Mf : 40;
+  // 950 KVA Transformer
+  const initial950 =
+    cachedTDials?.t950 !== undefined
+      ? cachedTDials.t950
+      : lastTransformer?.t950Curr || 15310;
+  const [t950Prev, setT950Prev] = useState<number>(initial950);
+  const [t950Curr, setT950Curr] = useState<number>(initial950);
+  const t950Mf = lastTransformer?.t950Mf || 40;
 
   const [tSaveSuccess, setTSaveSuccess] = useState(false);
 
-  // Simple differences ONLY (no loss calculations on operator screen)
+  // Differences calculated live
   const mainKwhDiff = Number((mainKwhCurr - mainKwhPrev).toFixed(2));
   const mainKvahDiff = Number((mainKvahCurr - mainKvahPrev).toFixed(2));
   const t750Diff = Number((t750Curr - t750Prev).toFixed(2));
   const t950Diff = Number((t950Curr - t950Prev).toFixed(2));
+
+  // Is there any new reading entered for transformer section?
+  const hasTransformerChanged =
+    mainKwhDiff > 0 || mainKvahDiff > 0 || t750Diff > 0 || t950Diff > 0;
 
   const handleSaveMainAndTransformer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,7 +319,8 @@ export const OperatorReadingEntry: React.FC = () => {
     const t950Units = Math.max(0, Number((t950Diff * t950Mf).toFixed(1)));
     const totalOutputUnits = Number((t750Units + t950Units).toFixed(1));
     const transformerLosses = Number((mainKwhCurr - totalOutputUnits).toFixed(1));
-    const lossPercentage = mainKwhCurr > 0 ? Number(((transformerLosses / mainKwhCurr) * 100).toFixed(2)) : 0;
+    const lossPercentage =
+      mainKwhCurr > 0 ? Number(((transformerLosses / mainKwhCurr) * 100).toFixed(2)) : 0;
 
     await addTransformerReading({
       date: readingDate,
@@ -259,13 +346,23 @@ export const OperatorReadingEntry: React.FC = () => {
       notes: 'Shift main incomer & transformer reading',
     });
 
+    // Cache permanently to localStorage
+    saveCachedTransformerDials({
+      mainKwh: mainKwhCurr,
+      mainKvah: mainKvahCurr,
+      t750: t750Curr,
+      t950: t950Curr,
+    });
+
+    // Immediately advance previous dials to current so Difference becomes 0 and button shows "Saved"
+    setMainKwhPrev(mainKwhCurr);
+    setMainKvahPrev(mainKvahCurr);
+    setT750Prev(t750Curr);
+    setT950Prev(t950Curr);
+
     setTSaveSuccess(true);
     setTimeout(() => {
       setTSaveSuccess(false);
-      setMainKwhPrev(mainKwhCurr);
-      setMainKvahPrev(mainKvahCurr);
-      setT750Prev(t750Curr);
-      setT950Prev(t950Curr);
     }, 2500);
   };
 
@@ -379,17 +476,19 @@ export const OperatorReadingEntry: React.FC = () => {
               {saveAllSuccess && (
                 <span className="flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  All 21 blocks saved!
+                  All blocks saved!
                 </span>
               )}
-              <button
-                type="button"
-                onClick={handleSaveAllBlocks}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save All Entered Blocks</span>
-              </button>
+              {pendingBlocksCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleSaveAllBlocks}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-all animate-in fade-in"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save All Entered Blocks ({pendingBlocksCount})</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -420,21 +519,23 @@ export const OperatorReadingEntry: React.FC = () => {
           {/* Blockwise List: KWH ONLY */}
           <div className="grid grid-cols-1 gap-2.5">
             {filteredBlocks.map((item) => {
-              const inputs = meterInputs[item.meter.id] || {
-                currKwh: item.prevKwh + 15,
-                saved: false,
-              };
+              const inputs = meterInputs[item.meter.id];
+              const effectivePrev =
+                inputs?.savedPrev !== undefined ? inputs.savedPrev : item.prevKwh;
+              const currentVal =
+                inputs?.currKwh !== undefined ? inputs.currKwh : effectivePrev;
 
-              const diffKwh = Number((inputs.currKwh - item.prevKwh).toFixed(2));
-              const isKwhWarning = inputs.currKwh < item.prevKwh;
+              const diffKwh = Number((currentVal - effectivePrev).toFixed(2));
+              const isKwhWarning = currentVal < effectivePrev;
+              const hasNewReading = diffKwh > 0;
 
               return (
                 <div
                   key={item.meter.id}
                   className={`bg-white rounded-2xl border transition-all p-3.5 shadow-sm ${
-                    inputs.saved
-                      ? 'border-emerald-300 bg-emerald-50/10'
-                      : 'border-slate-200 hover:border-blue-200'
+                    hasNewReading
+                      ? 'border-blue-300 bg-blue-50/10'
+                      : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -463,7 +564,7 @@ export const OperatorReadingEntry: React.FC = () => {
                           Prev KWH (Ref)
                         </span>
                         <span className="font-mono font-black text-sm text-blue-950">
-                          {item.prevKwh}
+                          {effectivePrev}
                         </span>
                       </div>
 
@@ -476,7 +577,7 @@ export const OperatorReadingEntry: React.FC = () => {
                           <input
                             type="number"
                             step="0.01"
-                            value={inputs.currKwh}
+                            value={currentVal}
                             onChange={(e) =>
                               handleKwhChange(
                                 item.meter.id,
@@ -495,45 +596,43 @@ export const OperatorReadingEntry: React.FC = () => {
                         </span>
                         <span
                           className={`font-mono font-bold text-sm ${
-                            diffKwh >= 0 ? 'text-blue-700' : 'text-red-600'
+                            diffKwh > 0
+                              ? 'text-blue-700'
+                              : diffKwh === 0
+                              ? 'text-slate-400'
+                              : 'text-red-600'
                           }`}
                         >
-                          {diffKwh >= 0 ? `+${diffKwh}` : diffKwh}
+                          {diffKwh > 0 ? `+${diffKwh}` : diffKwh === 0 ? '0' : diffKwh}
                         </span>
                       </div>
                     </div>
 
-                    {/* Right: Save Block Button */}
-                    <div className="flex items-center justify-end shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleSaveBlock(item)}
-                        disabled={inputs.saved || isKwhWarning}
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs transition-all shadow-sm ${
-                          inputs.saved
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-default'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
-                      >
-                        {inputs.saved ? (
-                          <>
-                            <Check className="w-4 h-4 text-emerald-700" />
-                            <span>Saved</span>
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4" />
-                            <span>Save Block</span>
-                          </>
-                        )}
-                      </button>
+                    {/* Right: Save Button or Saved Indicator */}
+                    <div className="flex items-center justify-end shrink-0 min-w-[110px]">
+                      {hasNewReading ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveBlock(item)}
+                          disabled={isKwhWarning}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs transition-all shadow-sm bg-blue-600 hover:bg-blue-700 text-white animate-in fade-in"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>Save Block</span>
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Check className="w-4 h-4 text-emerald-600" />
+                          <span>Saved</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {isKwhWarning && (
                     <div className="mt-2 text-xs text-red-600 font-semibold flex items-center gap-1">
                       <AlertCircle className="w-3.5 h-3.5" />
-                      <span>Current KWH reading cannot be lower than Previous KWH ({item.prevKwh})!</span>
+                      <span>Current KWH reading cannot be lower than Previous KWH ({effectivePrev})!</span>
                     </div>
                   )}
                 </div>
@@ -561,7 +660,7 @@ export const OperatorReadingEntry: React.FC = () => {
               </div>
 
               {tSaveSuccess && (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold animate-in fade-in">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>Main Incomer & Transformer readings committed!</span>
                 </div>
@@ -613,8 +712,12 @@ export const OperatorReadingEntry: React.FC = () => {
                   {/* Difference Only */}
                   <div className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between text-xs font-mono">
                     <span className="text-slate-600 font-semibold">Difference:</span>
-                    <span className="font-black text-blue-700 text-sm">
-                      {mainKwhDiff >= 0 ? `+${mainKwhDiff}` : mainKwhDiff}
+                    <span
+                      className={`font-black text-sm ${
+                        mainKwhDiff > 0 ? 'text-blue-700' : 'text-slate-400'
+                      }`}
+                    >
+                      {mainKwhDiff > 0 ? `+${mainKwhDiff}` : '0'}
                     </span>
                   </div>
                 </div>
@@ -649,15 +752,19 @@ export const OperatorReadingEntry: React.FC = () => {
                       required
                       value={mainKvahCurr}
                       onChange={(e) => setMainKvahCurr(parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 bg-white text-xs focus:outline-none focus:border-cyan-500"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 bg-white text-xs focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
                   {/* Difference Only */}
                   <div className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between text-xs font-mono">
                     <span className="text-slate-600 font-semibold">Difference:</span>
-                    <span className="font-black text-cyan-800 text-sm">
-                      {mainKvahDiff >= 0 ? `+${mainKvahDiff}` : mainKvahDiff}
+                    <span
+                      className={`font-black text-sm ${
+                        mainKvahDiff > 0 ? 'text-cyan-800' : 'text-slate-400'
+                      }`}
+                    >
+                      {mainKvahDiff > 0 ? `+${mainKvahDiff}` : '0'}
                     </span>
                   </div>
                 </div>
@@ -706,8 +813,12 @@ export const OperatorReadingEntry: React.FC = () => {
                   {/* Difference Only */}
                   <div className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between text-xs font-mono">
                     <span className="text-slate-600 font-semibold">Difference:</span>
-                    <span className="font-black text-blue-700 text-sm">
-                      {t750Diff >= 0 ? `+${t750Diff}` : t750Diff}
+                    <span
+                      className={`font-black text-sm ${
+                        t750Diff > 0 ? 'text-blue-700' : 'text-slate-400'
+                      }`}
+                    >
+                      {t750Diff > 0 ? `+${t750Diff}` : '0'}
                     </span>
                   </div>
                 </div>
@@ -746,8 +857,12 @@ export const OperatorReadingEntry: React.FC = () => {
                   {/* Difference Only */}
                   <div className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between text-xs font-mono">
                     <span className="text-slate-600 font-semibold">Difference:</span>
-                    <span className="font-black text-blue-700 text-sm">
-                      {t950Diff >= 0 ? `+${t950Diff}` : t950Diff}
+                    <span
+                      className={`font-black text-sm ${
+                        t950Diff > 0 ? 'text-blue-700' : 'text-slate-400'
+                      }`}
+                    >
+                      {t950Diff > 0 ? `+${t950Diff}` : '0'}
                     </span>
                   </div>
                 </div>
@@ -756,13 +871,20 @@ export const OperatorReadingEntry: React.FC = () => {
 
             {/* Save Button */}
             <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all"
-              >
-                <Save className="w-4 h-4" />
-                <span>Save Main Incomer & Transformer Readings</span>
-              </button>
+              {hasTransformerChanged ? (
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all animate-in fade-in"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Main Incomer & Transformer Readings</span>
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>Saved</span>
+                </span>
+              )}
             </div>
           </form>
         </div>
