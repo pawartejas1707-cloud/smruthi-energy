@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppProvider } from './context/AppContext';
+import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/layout/Header';
 import { Sidebar, ActiveTab } from './components/layout/Sidebar';
 import { RoleBanner } from './components/layout/RoleBanner';
@@ -14,10 +14,20 @@ import { AlertCenter } from './components/alerts/AlertCenter';
 import { CostSettingsView } from './components/costing/CostSettings';
 import { DatabaseView } from './components/database/DatabaseView';
 import { MongoConfigModal } from './components/auth/MongoConfigModal';
+import { OperatorPortal } from './components/operator/OperatorPortal';
 
 const AppContent: React.FC = () => {
+  const { currentRole } = useApp();
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isMongoModalOpen, setIsMongoModalOpen] = useState(false);
+
+  // USER 4: READING OPERATOR DEDICATED LIGHT-THEMED INTERFACE
+  // When logged in / selected as reading operator, show ONLY the clean Operator Portal
+  // (Reading Entry Panel with prominent previous reading reference + Permanent Meter Settings)
+  // No Admin Dashboard, No Summary Cards, No Share Market Graph, No Costing, No Alert tickets.
+  if (currentRole === 'reading_operator') {
+    return <OperatorPortal />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-cyan-500/20 selection:text-cyan-200">

@@ -77,7 +77,10 @@ const ROLE_PROFILES: Record<UserRole, UserProfile> = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentRole, setCurrentRole] = useState<UserRole>('electrical_admin');
+  const [currentRole, setCurrentRole] = useState<UserRole>(() => {
+    const saved = localStorage.getItem('smruthi_current_role');
+    return (saved as UserRole) || 'reading_operator';
+  });
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -141,6 +144,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   // Local backups
+  useEffect(() => {
+    localStorage.setItem('smruthi_current_role', currentRole);
+  }, [currentRole]);
+
   useEffect(() => {
     localStorage.setItem('smruthi_sections', JSON.stringify(sections));
   }, [sections]);

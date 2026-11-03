@@ -139,6 +139,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMongoModal, onOpenAlerts }
             )}
           </button>
 
+          {/* Direct Switch to Reading Operator Mode Button */}
+          <button
+            onClick={() => setCurrentRole('reading_operator')}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/40 transition-colors"
+            title="Open Reading Operator Interface"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Reading Operator Mode</span>
+          </button>
+
           {/* Role Switcher Dropdown */}
           <div className="relative">
             <button

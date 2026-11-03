@@ -27,14 +27,27 @@ router.get('/sections', async (req, res) => {
   }
 });
 
+// Helper to find a section by either MongoDB _id or custom code/id
+async function findSection(idOrCode: string) {
+  let sec = null;
+  if (/^[0-9a-fA-F]{24}$/.test(idOrCode)) {
+    sec = await SectionModel.findById(idOrCode);
+  }
+  if (!sec) {
+    sec = await SectionModel.findOne({
+      $or: [{ code: idOrCode }, { name: idOrCode }],
+    });
+  }
+  return sec;
+}
+
 router.put('/sections/:id/limit', async (req, res) => {
   try {
     const { dailyLimitKwh } = req.body;
-    const sec = await SectionModel.findByIdAndUpdate(
-      req.params.id,
-      { dailyLimitKwh },
-      { new: true }
-    );
+    let sec = await findSection(req.params.id);
+    if (!sec) return res.status(404).json({ error: 'Section not found' });
+    sec.dailyLimitKwh = dailyLimitKwh;
+    await sec.save();
     res.json(sec);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -43,7 +56,7 @@ router.put('/sections/:id/limit', async (req, res) => {
 
 router.post('/sections/:id/meters', async (req, res) => {
   try {
-    const sec = await SectionModel.findById(req.params.id);
+    const sec = await findSection(req.params.id);
     if (!sec) return res.status(404).json({ error: 'Section not found' });
     sec.meters.push(req.body);
     await sec.save();
@@ -55,9 +68,18 @@ router.post('/sections/:id/meters', async (req, res) => {
 
 router.put('/sections/:id/meters/:meterId', async (req, res) => {
   try {
-    const sec = await SectionModel.findById(req.params.id);
+    const sec = await findSection(req.params.id);
     if (!sec) return res.status(404).json({ error: 'Section not found' });
-    const meter = (sec.meters as any).id(req.params.meterId);
+    
+    let meter = (sec.meters as any).id(req.params.meterId);
+    if (!meter) {
+      meter = sec.meters.find(
+        (m: any) =>
+          m.meterCode === req.params.meterId ||
+          m._id?.toString() === req.params.meterId ||
+          (m as any).id === req.params.meterId
+      );
+    }
     if (!meter) return res.status(404).json({ error: 'Meter not found' });
     Object.assign(meter, req.body);
     await sec.save();
