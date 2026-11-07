@@ -13,12 +13,15 @@ import {
 import { useApp } from '../../context/AppContext';
 import { formatUnits } from '../../lib/calculations';
 import { EnquiryRecord } from '../../types';
+import { EmailAlertManager } from './EmailAlertManager';
 
 export const AlertCenter: React.FC = () => {
   const { alerts, enquiries, resolveAlert, replyToEnquiry, currentRole, currentUser } = useApp();
 
   const isElectricalAdmin = currentRole === 'electrical_admin';
   const isPlantAdmin = currentRole === 'plant_admin';
+
+  const [viewTab, setViewTab] = useState<'alerts' | 'emailConfig'>('alerts');
 
   // Reply state
   const [activeEnquiryToReply, setActiveEnquiryToReply] = useState<EnquiryRecord | null>(null);
@@ -57,8 +60,41 @@ export const AlertCenter: React.FC = () => {
         </div>
       </div>
 
-      {/* Two Column Layout: Enquiries Thread vs Alert Log */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+        <button
+          onClick={() => setViewTab('alerts')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            viewTab === 'alerts'
+              ? 'bg-slate-800 text-white shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-850'
+          }`}
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+          <span>Alerts & Enquiries</span>
+        </button>
+
+        <button
+          onClick={() => setViewTab('emailConfig')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            viewTab === 'emailConfig'
+              ? 'bg-red-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-850'
+          }`}
+        >
+          <Mail className="w-3.5 h-3.5" />
+          <span>Automated Email Alerts (A Block)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white text-red-700 font-bold">
+            Active
+          </span>
+        </button>
+      </div>
+
+      {viewTab === 'emailConfig' ? (
+        <EmailAlertManager />
+      ) : (
+        /* Two Column Layout: Enquiries Thread vs Alert Log */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Plant Admin Enquiries & Responses */}
         <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -227,6 +263,7 @@ export const AlertCenter: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Reply Modal */}
       {activeEnquiryToReply && (

@@ -74,4 +74,16 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ replyMessage, repliedBy }),
     }),
+  getEmailConfig: () => fetchApi<any>('/email/config'),
+  updateEmailConfig: (data: any) =>
+    fetchApi('/email/config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  sendTestEmail: (data: { sectionName?: string; recipient?: string }) =>
+    fetchApi<any>('/email/test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getEmailLogs: () => fetchApi<any[]>('/email/logs'),
 };

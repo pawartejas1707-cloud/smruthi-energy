@@ -8,6 +8,7 @@ import {
   Search,
   CheckCircle2,
   AlertCircle,
+  Mail,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Section, Meter } from '../../types';
@@ -90,6 +91,7 @@ export const OperatorReadingEntry: React.FC = () => {
 
   // Local state tracking user typed values
   const [userTypedKwh, setUserTypedKwh] = useState<Record<string, number>>({});
+  const [emailAlertToast, setEmailAlertToast] = useState<{ blockName: string; excess: number } | null>(null);
 
   const blocksList = useMemo(() => {
     const list: Array<{
@@ -201,6 +203,18 @@ export const OperatorReadingEntry: React.FC = () => {
       });
     } catch (err) {
       console.warn('Background sync warning:', err);
+    }
+
+    // 5. If this is A Block and exceeds daily limit, trigger toast feedback
+    if (
+      (item.section.name === 'A Block' || item.section.code === 'SEC-A-BLK') &&
+      consumedKwh > item.section.dailyLimitKwh
+    ) {
+      setEmailAlertToast({
+        blockName: item.section.name,
+        excess: Number((consumedKwh - item.section.dailyLimitKwh).toFixed(1)),
+      });
+      setTimeout(() => setEmailAlertToast(null), 7000);
     }
   };
 
@@ -879,6 +893,28 @@ export const OperatorReadingEntry: React.FC = () => {
               )}
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Automated Email Alert Dispatch Toast */}
+      {emailAlertToast && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-slate-900 border-2 border-red-500 shadow-2xl text-white max-w-sm sm:max-w-md animate-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-red-600 text-white shrink-0 shadow-lg shadow-red-600/30">
+              <Mail className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-red-400 uppercase tracking-wider">
+                <span>🚨 Automated Alert Dispatched</span>
+              </div>
+              <h5 className="font-extrabold text-sm text-white mt-0.5">
+                {emailAlertToast.blockName} Limit Breached (+{emailAlertToast.excess} kWh)
+              </h5>
+              <p className="text-xs text-slate-300 mt-1 leading-snug">
+                An urgent electrical consumption breach email has been automatically generated and sent to the Plant Admin & Chief Electrical Engineer.
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>

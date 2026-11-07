@@ -5,6 +5,12 @@ import { TransformerReadingModel } from '../models/TransformerReading.js';
 import { CostSettingsModel } from '../models/CostSettings.js';
 import { AlertModel } from '../models/Alert.js';
 import { EnquiryModel } from '../models/Enquiry.js';
+import { EmailAlertConfigModel } from '../models/EmailAlertConfig.js';
+import { EmailLogModel } from '../models/EmailLog.js';
+import {
+  getEmailAlertConfig,
+  sendBlockLimitEmailAlert,
+} from '../utils/emailService.js';
 
 const router = express.Router();
 
@@ -143,6 +149,21 @@ router.post('/readings', async (req, res) => {
               status: 'active',
             });
           }
+
+          // Automated Email Alert Dispatch for monitored blocks (e.g. A Block)
+          try {
+            await sendBlockLimitEmailAlert({
+              sectionName: sec.name,
+              sectionCode: sec.code,
+              date: reading.date,
+              consumedKwh: Number(totalConsumed.toFixed(1)),
+              limitKwh: sec.dailyLimitKwh,
+              exceededKwh,
+              exceededPercentage,
+            });
+          } catch (emailErr) {
+            console.warn('Automated email alert dispatch warning:', emailErr);
+          }
         }
       }
     } catch (alertErr) {
@@ -261,6 +282,67 @@ router.put('/enquiries/:id/reply', async (req, res) => {
       { new: true }
     );
     res.json(enq);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Automated Email Alert System Configuration & Logs
+router.get('/email/config', async (req, res) => {
+  try {
+    const config = await getEmailAlertConfig();
+    res.json(config);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/email/config', async (req, res) => {
+  try {
+    let config = await EmailAlertConfigModel.findOne();
+    if (!config) {
+      config = new EmailAlertConfigModel(req.body);
+    } else {
+      Object.assign(config, req.body);
+    }
+    await config.save();
+    res.json(config);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/email/test', async (req, res) => {
+  try {
+    const { sectionName = 'A Block', recipient } = req.body;
+    let sec = await findSection(sectionName);
+    const limit = sec ? sec.dailyLimitKwh : 2800;
+    const consumed = Math.round(limit * 1.14);
+    const exceeded = consumed - limit;
+    const pct = Number(((exceeded / limit) * 100).toFixed(1));
+
+    const result = await sendBlockLimitEmailAlert({
+      sectionName: sec ? sec.name : 'A Block',
+      sectionCode: sec ? sec.code : 'SEC-A-BLK',
+      date: new Date().toISOString().split('T')[0],
+      consumedKwh: consumed,
+      limitKwh: limit,
+      exceededKwh: exceeded,
+      exceededPercentage: pct,
+      isTest: true,
+      targetRecipients: recipient ? [recipient] : undefined,
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/email/logs', async (req, res) => {
+  try {
+    const logs = await EmailLogModel.find().sort({ sentAt: -1 }).limit(50);
+    res.json(logs);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

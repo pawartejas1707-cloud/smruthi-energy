@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Mail, CheckCircle2, Clock, Layers, MessageSquare, Send } from 'lucide-react';
+import { AlertTriangle, Mail, CheckCircle2, Clock, Layers, MessageSquare, Send, Bell } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatUnits } from '../../lib/calculations';
 import { EnquiryRecord } from '../../types';
+import { EmailAlertManager } from '../alerts/EmailAlertManager';
 
 export const PlantAdminAlerts: React.FC = () => {
   const { alerts, enquiries, sendEnquiry, currentUser, sections } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'alerts' | 'enquiries'>('alerts');
+  const [activeTab, setActiveTab] = useState<'emails' | 'alerts' | 'enquiries'>('emails');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
 
   // Compose form states
@@ -160,8 +161,23 @@ export const PlantAdminAlerts: React.FC = () => {
         </div>
       )}
 
-      {/* View Switcher: Active Alerts vs Enquiries */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      {/* View Switcher: Email Alerts vs Limit Alerts vs Enquiries */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          onClick={() => setActiveTab('emails')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'emails'
+              ? 'bg-red-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Mail className="w-3.5 h-3.5" />
+          <span>Automated Email Alerts (A Block)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white text-red-700 font-bold">
+            Active
+          </span>
+        </button>
+
         <button
           onClick={() => setActiveTab('alerts')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -192,6 +208,9 @@ export const PlantAdminAlerts: React.FC = () => {
           </span>
         </button>
       </div>
+
+      {/* Tab 0: Automated Email Alerts */}
+      {activeTab === 'emails' && <EmailAlertManager />}
 
       {/* Tab 1: Limit Alerts */}
       {activeTab === 'alerts' && (

@@ -163,3 +163,35 @@ export interface BillEstimate {
   totalBill: number;
   effectiveRate: number; // totalBill / totalKwh
 }
+
+export interface EmailAlertConfig {
+  recipients: string[];
+  monitoredBlocks: string[]; // e.g. ['A Block']
+  isEnabled: boolean;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecure?: boolean;
+  smtpUser?: string;
+  smtpPass?: string;
+  fromAddress?: string;
+  updatedAt?: string;
+}
+
+export interface EmailLog {
+  id: string;
+  sectionName: string;
+  sectionCode?: string;
+  date: string;
+  consumedKwh: number;
+  limitKwh: number;
+  exceededKwh: number;
+  exceededPercentage: number;
+  recipients: string[];
+  subject: string;
+  bodySnippet: string;
+  status: 'sent' | 'simulated' | 'failed';
+  error?: string;
+  messageId?: string;
+  previewUrl?: string;
+  sentAt: string;
+}

@@ -9,6 +9,8 @@ import type {
   ConsumptionAlert,
   EnquiryRecord,
   CostSettings,
+  EmailAlertConfig,
+  EmailLog,
 } from '../types';
 import { INITIAL_SECTIONS } from '../data/initialSections';
 import { generateRealisticHistoricalData, DEFAULT_COST_SETTINGS } from '../data/sampleHistory';
@@ -27,6 +29,8 @@ interface AppContextType {
   alerts: ConsumptionAlert[];
   enquiries: EnquiryRecord[];
   costSettings: CostSettings;
+  emailConfig: EmailAlertConfig;
+  emailLogs: EmailLog[];
   isLoading: boolean;
   isBackendConnected: boolean;
 
@@ -37,6 +41,9 @@ interface AppContextType {
   addMeterToSection: (sectionId: string, meter: Omit<Meter, 'id'>) => Promise<void>;
   updateMeter: (sectionId: string, meterId: string, updates: Partial<Meter>) => Promise<void>;
   updateCostSettings: (updates: Partial<CostSettings>) => Promise<void>;
+  updateEmailConfig: (updates: Partial<EmailAlertConfig>) => Promise<void>;
+  sendTestEmail: (sectionName?: string, recipient?: string) => Promise<any>;
+  refreshEmailLogs: () => Promise<void>;
   sendEnquiry: (enquiry: Omit<EnquiryRecord, 'id' | 'createdAt' | 'status'>) => Promise<void>;
   replyToEnquiry: (enquiryId: string, replyMessage: string) => Promise<void>;
   resolveAlert: (alertId: string) => Promise<void>;
@@ -141,6 +148,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: new Date().toISOString(),
       },
     ];
+  });
+
+  const [emailConfig, setEmailConfig] = useState<EmailAlertConfig>(() => {
+    const saved = localStorage.getItem('smruthi_email_config');
+    return saved
+      ? JSON.parse(saved)
+      : {
+          recipients: [
+            'plant.head@smruthi-organics.com',
+            'electrical.hod@smruthi-organics.com',
+          ],
+          monitoredBlocks: ['A Block'],
+          isEnabled: true,
+          fromAddress: 'Smruthi Organics Electrical Dept <alerts@smruthi-organics.com>',
+        };
+  });
+
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>(() => {
+    const saved = localStorage.getItem('smruthi_email_logs');
+    return saved ? JSON.parse(saved) : [];
   });
 
   // Local backups
@@ -325,6 +352,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               repliedBy: e.repliedBy,
               repliedAt: e.repliedAt,
               createdAt: e.createdAt || e.date,
+            }))
+          );
+        }
+
+        // Fetch email alert config
+        const eConf = await api.getEmailConfig();
+        if (eConf) {
+          setEmailConfig(eConf);
+        }
+
+        // Fetch email logs
+        const eLogs = await api.getEmailLogs();
+        if (eLogs && eLogs.length > 0) {
+          setEmailLogs(
+            eLogs.map((l: any) => ({
+              id: l._id || l.id,
+              sectionName: l.sectionName,
+              sectionCode: l.sectionCode,
+              date: l.date,
+              consumedKwh: l.consumedKwh,
+              limitKwh: l.limitKwh,
+              exceededKwh: l.exceededKwh,
+              exceededPercentage: l.exceededPercentage,
+              recipients: l.recipients || [],
+              subject: l.subject,
+              bodySnippet: l.bodySnippet,
+              status: l.status,
+              error: l.error,
+              messageId: l.messageId,
+              previewUrl: l.previewUrl,
+              sentAt: l.sentAt || l.createdAt,
             }))
           );
         }
@@ -539,6 +597,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateEmailConfig = async (updates: Partial<EmailAlertConfig>) => {
+    const updated = { ...emailConfig, ...updates };
+    setEmailConfig(updated);
+    localStorage.setItem('smruthi_email_config', JSON.stringify(updated));
+
+    if (isBackendConnected) {
+      try {
+        await api.updateEmailConfig(updated);
+      } catch (err) {
+        console.warn('Failed to save email config to backend:', err);
+      }
+    }
+  };
+
+  const refreshEmailLogs = async () => {
+    if (isBackendConnected) {
+      try {
+        const logs = await api.getEmailLogs();
+        if (logs) {
+          setEmailLogs(
+            logs.map((l: any) => ({
+              id: l._id || l.id,
+              sectionName: l.sectionName,
+              sectionCode: l.sectionCode,
+              date: l.date,
+              consumedKwh: l.consumedKwh,
+              limitKwh: l.limitKwh,
+              exceededKwh: l.exceededKwh,
+              exceededPercentage: l.exceededPercentage,
+              recipients: l.recipients || [],
+              subject: l.subject,
+              bodySnippet: l.bodySnippet,
+              status: l.status,
+              error: l.error,
+              messageId: l.messageId,
+              previewUrl: l.previewUrl,
+              sentAt: l.sentAt || l.createdAt,
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to refresh email logs:', err);
+      }
+    }
+  };
+
+  const sendTestEmail = async (sectionName: string = 'A Block', recipient?: string) => {
+    if (isBackendConnected) {
+      try {
+        const res = await api.sendTestEmail({ sectionName, recipient });
+        await refreshEmailLogs();
+        return res;
+      } catch (err) {
+        console.warn('Backend send test email error:', err);
+      }
+    }
+
+    // Simulated local fallback if backend is offline
+    const simLog: EmailLog = {
+      id: `sim-log-${Date.now()}`,
+      sectionName,
+      sectionCode: 'SEC-A-BLK',
+      date: new Date().toISOString().split('T')[0],
+      consumedKwh: 3150,
+      limitKwh: 2800,
+      exceededKwh: 350,
+      exceededPercentage: 12.5,
+      recipients: recipient ? [recipient] : emailConfig.recipients,
+      subject: `[TEST ALERT] Smruthi Organics - Consumption Threshold Alert: ${sectionName}`,
+      bodySnippet: `${sectionName} exceeded daily limit of 2800 kWh with 3150 kWh (+350 kWh, +12.5%).`,
+      status: 'simulated',
+      sentAt: new Date().toISOString(),
+    };
+    setEmailLogs((prev) => [simLog, ...prev]);
+    localStorage.setItem('smruthi_email_logs', JSON.stringify([simLog, ...emailLogs]));
+    return {
+      success: true,
+      status: 'simulated',
+      message: `Test email logged and simulated for ${sectionName}`,
+    };
+  };
+
   const resetToDefaultData = () => {
     localStorage.clear();
     const fresh = generateRealisticHistoricalData();
@@ -562,6 +702,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         alerts,
         enquiries,
         costSettings,
+        emailConfig,
+        emailLogs,
         isLoading,
         isBackendConnected,
         addDailyReading,
@@ -570,6 +712,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addMeterToSection,
         updateMeter,
         updateCostSettings,
+        updateEmailConfig,
+        sendTestEmail,
+        refreshEmailLogs,
         sendEnquiry,
         replyToEnquiry,
         resolveAlert,
