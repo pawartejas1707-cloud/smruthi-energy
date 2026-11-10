@@ -1,11 +1,15 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { Info, Lock, CheckCircle2, AlertOctagon } from 'lucide-react';
+import { Info, Lock, CheckCircle2, AlertOctagon, Building2 } from 'lucide-react';
+import { UserRole } from '../../types';
 
 export const RoleBanner: React.FC = () => {
   const { currentRole, currentUser } = useApp();
 
-  const roleInfo = {
+  const roleInfoMap: Record<
+    UserRole,
+    { title: string; desc: string; icon: React.ComponentType<{ className?: string }>; style: string }
+  > = {
     electrical_admin: {
       title: 'Electrical Admin Mode (Full Access)',
       desc: 'You have administrative rights to manage meters, set limits, adjust tariffs, enter/edit readings, and manage system settings.',
@@ -30,8 +34,45 @@ export const RoleBanner: React.FC = () => {
       icon: AlertOctagon,
       style: 'bg-blue-950/30 border-blue-800/50 text-blue-300',
     },
-  }[currentRole];
+    block_a: {
+      title: 'A Block Sub-ID Portal',
+      desc: 'Department in-charge view: monitor block energy consumption vs allocated daily limit and submit responses to Plant Admin enquiries.',
+      icon: Building2,
+      style: 'bg-blue-950/30 border-blue-800/50 text-blue-300',
+    },
+    block_b: {
+      title: 'B Block Sub-ID Portal',
+      desc: 'Department in-charge view: monitor block energy consumption vs allocated daily limit and submit responses to Plant Admin enquiries.',
+      icon: Building2,
+      style: 'bg-indigo-950/30 border-indigo-800/50 text-indigo-300',
+    },
+    block_c: {
+      title: 'C Block Sub-ID Portal',
+      desc: 'Department in-charge view: monitor block energy consumption vs allocated daily limit and submit responses to Plant Admin enquiries.',
+      icon: Building2,
+      style: 'bg-cyan-950/30 border-cyan-800/50 text-cyan-300',
+    },
+    block_d: {
+      title: 'D Block Sub-ID Portal',
+      desc: 'Department in-charge view: monitor block energy consumption vs allocated daily limit and submit responses to Plant Admin enquiries.',
+      icon: Building2,
+      style: 'bg-teal-950/30 border-teal-800/50 text-teal-300',
+    },
+    block_eg: {
+      title: 'E & G Block Sub-ID Portal',
+      desc: 'Department in-charge view: monitor block energy consumption vs allocated daily limit and submit responses to Plant Admin enquiries.',
+      icon: Building2,
+      style: 'bg-amber-950/30 border-amber-800/50 text-amber-300',
+    },
+    block_f: {
+      title: 'F Block Sub-ID Portal',
+      desc: 'Department in-charge view: monitor block energy consumption vs allocated daily limit and submit responses to Plant Admin enquiries.',
+      icon: Building2,
+      style: 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300',
+    },
+  };
 
+  const roleInfo = roleInfoMap[currentRole] || roleInfoMap.electrical_admin;
   const Icon = roleInfo.icon;
 
   return (

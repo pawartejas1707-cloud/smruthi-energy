@@ -40,12 +40,18 @@ export const OperatorPortal: React.FC = () => {
     },
     plant_admin: {
       label: 'Plant Admin',
-      badge: 'Enquiry & Monitoring',
+      badge: 'Head of Factory',
     },
     viewer: {
       label: 'Viewer',
       badge: 'Read-Only MIS',
     },
+    block_a: { label: 'A Block In-Charge', badge: 'Sub-ID' },
+    block_b: { label: 'B Block In-Charge', badge: 'Sub-ID' },
+    block_c: { label: 'C Block In-Charge', badge: 'Sub-ID' },
+    block_d: { label: 'D Block In-Charge', badge: 'Sub-ID' },
+    block_eg: { label: 'E & G Block In-Charge', badge: 'Sub-ID' },
+    block_f: { label: 'F Block In-Charge', badge: 'Sub-ID' },
   };
 
   return (
@@ -136,7 +142,7 @@ export const OperatorPortal: React.FC = () => {
               </button>
 
               {roleDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white border border-slate-200 shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white border border-slate-200 shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[85vh] overflow-y-auto">
                   <div className="px-3 py-2 border-b border-slate-100 mb-1">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       Switch User Role
@@ -146,12 +152,15 @@ export const OperatorPortal: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Core Plant Roles
+                  </div>
+                  <div className="space-y-0.5 mb-2">
                     {(
                       [
                         'reading_operator',
-                        'electrical_admin',
                         'plant_admin',
+                        'electrical_admin',
                         'viewer',
                       ] as UserRole[]
                     ).map((role) => (
@@ -162,7 +171,47 @@ export const OperatorPortal: React.FC = () => {
                           setCurrentRole(role);
                           setRoleDropdownOpen(false);
                         }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors text-left ${
+                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-medium transition-colors text-left ${
+                          currentRole === role
+                            ? 'bg-blue-50 text-blue-800 border border-blue-200 font-bold'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-semibold">{roleLabels[role].label}</div>
+                          <div className="text-[10px] text-slate-500">
+                            {roleLabels[role].badge}
+                          </div>
+                        </div>
+                        {currentRole === role && (
+                          <CheckCircle className="w-3.5 h-3.5 text-blue-600" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-100 pt-1.5">
+                    Production Block Sub-IDs
+                  </div>
+                  <div className="space-y-0.5">
+                    {(
+                      [
+                        'block_a',
+                        'block_b',
+                        'block_c',
+                        'block_d',
+                        'block_eg',
+                        'block_f',
+                      ] as UserRole[]
+                    ).map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => {
+                          setCurrentRole(role);
+                          setRoleDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-medium transition-colors text-left ${
                           currentRole === role
                             ? 'bg-blue-50 text-blue-800 border border-blue-200 font-bold'
                             : 'text-slate-700 hover:bg-slate-100'

@@ -1,10 +1,14 @@
 import React, { useMemo } from 'react';
-import { Zap, History, Activity, ShieldCheck, TrendingUp, TrendingDown } from 'lucide-react';
+import { Zap, History, Activity, IndianRupee, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { formatUnits } from '../../lib/calculations';
+import { formatUnits, formatINR, calculateBillEstimate } from '../../lib/calculations';
 
-export const PlantAdminSummaryCards: React.FC = () => {
-  const { readings } = useApp();
+interface PlantAdminSummaryCardsProps {
+  onOpenCosting?: () => void;
+}
+
+export const PlantAdminSummaryCards: React.FC<PlantAdminSummaryCardsProps> = ({ onOpenCosting }) => {
+  const { readings, costSettings } = useApp();
 
   const metrics = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -38,14 +42,15 @@ export const PlantAdminSummaryCards: React.FC = () => {
     // Daily Average Load (kW) = Total Energy in 24h / 24h
     const dailyAvgLoadKw = Number((todayKwh / 24).toFixed(1));
 
-    // Peak Demand in kVA today
+    // Peak Demand in kVA today for bill estimation
     const peakDemandKva = Math.max(
       ...readings.filter((r) => r.date === effectiveDate).map((r) => r.calculatedDemand || 0),
       450
     );
 
-    const contractDemandTotal = 1200; // Contract demand kVA
-    const demandUtilization = Number(((peakDemandKva / contractDemandTotal) * 100).toFixed(1));
+    // Bill estimation for today & projected monthly
+    const todayBillEst = calculateBillEstimate(todayKwh, peakDemandKva, costSettings, 1);
+    const monthlyBillEst = calculateBillEstimate(todayKwh * 30, peakDemandKva, costSettings, 30);
 
     return {
       effectiveDate,
@@ -54,30 +59,29 @@ export const PlantAdminSummaryCards: React.FC = () => {
       yesterdayKwh,
       changePercent,
       dailyAvgLoadKw,
-      peakDemandKva,
-      contractDemandTotal,
-      demandUtilization,
+      todayBill: todayBillEst.totalBill,
+      monthlyBill: monthlyBillEst.totalBill,
     };
-  }, [readings]);
+  }, [readings, costSettings]);
 
   const cards = [
     {
-      title: "Today's Total Electricity Consumption",
-      subtitle: `All 21 sections combined (${metrics.effectiveDate})`,
+      title: "Today's Total Unit Consumption",
+      subtitle: `All 21 blocks addition (${metrics.effectiveDate})`,
       value: `${formatUnits(metrics.todayKwh)} kWh`,
       icon: Zap,
       iconBg: 'bg-amber-100 text-amber-700 border-amber-200',
       borderAccent: 'border-l-4 border-l-amber-500',
       extra: (
         <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-          <span>Active Feeders:</span>
-          <span className="font-bold text-slate-900">21 Sections (23 Meters)</span>
+          <span>Combined Feeder Sum:</span>
+          <span className="font-bold text-slate-900">21 Blocks Addition</span>
         </div>
       ),
     },
     {
-      title: "Yesterday's Total Electricity Consumption",
-      subtitle: `Recorded on ${metrics.prevDateStr}`,
+      title: "Yesterday's Reading / Consumption",
+      subtitle: `All blocks addition (${metrics.prevDateStr})`,
       value: `${formatUnits(metrics.yesterdayKwh)} kWh`,
       icon: History,
       iconBg: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -98,7 +102,7 @@ export const PlantAdminSummaryCards: React.FC = () => {
       ),
     },
     {
-      title: 'Daily Average Connected Load',
+      title: 'Plant Average Load',
       subtitle: '24-hour continuous active load',
       value: `${formatUnits(metrics.dailyAvgLoadKw)} kW`,
       icon: Activity,
@@ -106,7 +110,7 @@ export const PlantAdminSummaryCards: React.FC = () => {
       borderAccent: 'border-l-4 border-l-indigo-500',
       extra: (
         <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-          <span>Plant Load Status:</span>
+          <span>Continuous Active Load:</span>
           <span className="inline-flex items-center gap-1 font-bold text-indigo-700">
             <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
             Normal Industrial Load
@@ -115,17 +119,23 @@ export const PlantAdminSummaryCards: React.FC = () => {
       ),
     },
     {
-      title: 'Peak Contract Demand',
-      subtitle: `Contract Limit: ${metrics.contractDemandTotal} kVA`,
-      value: `${metrics.peakDemandKva} kVA`,
-      icon: ShieldCheck,
+      title: 'Total Electricity Bill / Cost',
+      subtitle: `Tariff: ₹${costSettings.ratePerKwh}/unit • All blocks combined`,
+      value: formatINR(metrics.todayBill),
+      icon: IndianRupee,
       iconBg: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-      borderAccent: 'border-l-4 border-l-emerald-500',
+      borderAccent: 'border-l-4 border-l-emerald-500 cursor-pointer hover:border-emerald-600 hover:shadow-md transition-all',
+      onClick: onOpenCosting,
       extra: (
-        <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-          <span>Demand Utilization:</span>
-          <span className="font-bold text-emerald-700 font-mono">
-            {metrics.demandUtilization}% of 1,200 kVA
+        <div
+          onClick={onOpenCosting}
+          className="flex items-center justify-between text-xs text-emerald-800 font-bold hover:underline cursor-pointer pt-0.5"
+          title="Click to open Cost Analysis Section"
+        >
+          <span>30-Day Est: {formatINR(metrics.monthlyBill)}</span>
+          <span className="flex items-center gap-1 text-emerald-700 group-hover:translate-x-0.5 transition-transform">
+            <span>Analyze Cost</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </span>
         </div>
       ),
@@ -139,7 +149,10 @@ export const PlantAdminSummaryCards: React.FC = () => {
         return (
           <div
             key={idx}
-            className={`rounded-2xl bg-white border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all duration-200 ${card.borderAccent}`}
+            onClick={card.onClick}
+            className={`rounded-2xl bg-white border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all duration-200 ${
+              card.borderAccent
+            } ${card.onClick ? 'cursor-pointer hover:border-emerald-400 group' : ''}`}
           >
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>

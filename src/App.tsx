@@ -16,6 +16,7 @@ import { DatabaseView } from './components/database/DatabaseView';
 import { MongoConfigModal } from './components/auth/MongoConfigModal';
 import { OperatorPortal } from './components/operator/OperatorPortal';
 import { PlantAdminPortal } from './components/plantAdmin/PlantAdminPortal';
+import { BlockDepartmentPortal } from './components/blocks/BlockDepartmentPortal';
 
 const AppContent: React.FC = () => {
   const { currentRole } = useApp();
@@ -31,11 +32,17 @@ const AppContent: React.FC = () => {
   }
 
   // USER 2: PLANT ADMIN (HEAD OF FACTORY) DEDICATED INDUSTRIAL LIGHT THEME INTERFACE
-  // Simplified executive view: KPIs, Consumption Trend, 21 Sections with Day/Week/Month/Year filters,
-  // Transformers & Substation, 21 Sections Directory, Alerts & Enquiries.
-  // NO Daily readings entry, NO Historical reports, NO Supabase/Deploy, NO Costing, NO Capacity Headroom.
+  // Simplified executive view: 4 KPI Cards (Total Units, Yesterday, Avg Load, Total Bill linking to Costing),
+  // Consumption Trend, 21 Sections Monitoring, Cost Analysis, Alerts & Enquiries.
   if (currentRole === 'plant_admin') {
     return <PlantAdminPortal />;
+  }
+
+  // USER 5: PRODUCTION BLOCK SUB-IDS (A, B, C, D, E&G, F Blocks)
+  // Dedicated Block In-Charge portal to monitor block consumption vs daily limit, attached meters,
+  // and answer enquiries raised by the Plant Admin directly in-app.
+  if (currentRole.startsWith('block_')) {
+    return <BlockDepartmentPortal />;
   }
 
   return (

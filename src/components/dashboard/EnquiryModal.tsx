@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Mail, Send, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
-import { Section, DailyReading } from '../../types';
+import React, { useState, useMemo } from 'react';
+import { Mail, Send, AlertTriangle, X, CheckCircle2, Building2 } from 'lucide-react';
+import { Section, DailyReading, UserRole } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { formatUnits } from '../../lib/calculations';
 
@@ -19,8 +19,28 @@ export const EnquiryModal: React.FC<EnquiryModalProps> = ({ section, todayUnits,
     ? Number(((exceededKwh / section.dailyLimitKwh) * 100).toFixed(1))
     : 0;
 
+  // Map 6 core production blocks to their sub-IDs, all other sections to Electrical Admin
+  const matchedTarget = useMemo(() => {
+    const sName = section.name.toLowerCase().trim();
+    const map: Record<string, { role: UserRole; name: string; email: string }> = {
+      'a block': { role: 'block_a', name: 'Sanjay Deshmukh (A Block In-Charge)', email: 'block-a@smruthi-organics.com' },
+      'b block': { role: 'block_b', name: 'Anil Kulkarni (B Block In-Charge)', email: 'block-b@smruthi-organics.com' },
+      'c block': { role: 'block_c', name: 'Prakash Shinde (C Block In-Charge)', email: 'block-c@smruthi-organics.com' },
+      'd block': { role: 'block_d', name: 'Mahesh Jadhav (D Block In-Charge)', email: 'block-d@smruthi-organics.com' },
+      'e & g': { role: 'block_eg', name: 'Sunil Chavan (E & G Block In-Charge)', email: 'block-eg@smruthi-organics.com' },
+      'e & g block': { role: 'block_eg', name: 'Sunil Chavan (E & G Block In-Charge)', email: 'block-eg@smruthi-organics.com' },
+      'f block': { role: 'block_f', name: 'Vikas Gaikwad (F Block In-Charge)', email: 'block-f@smruthi-organics.com' },
+    };
+
+    return map[sName] || {
+      role: 'electrical_admin' as UserRole,
+      name: 'Er. Rajesh K. More (Electrical Admin / Chief)',
+      email: 'electrical.hod@smruthi-organics.com',
+    };
+  }, [section]);
+
   const defaultSubject = `[URGENT] Consumption Limit Breach: ${section.name} (+${exceededPct}%)`;
-  const defaultBody = `Dear Electrical Department / Chief Engineer,
+  const defaultBody = `Dear ${matchedTarget.name},
 
 During today's monitoring shift, ${section.name} consumed ${formatUnits(
     todayUnits
@@ -28,7 +48,7 @@ During today's monitoring shift, ${section.name} consumed ${formatUnits(
     section.dailyLimitKwh
   )} kWh by ${formatUnits(exceededKwh)} kWh (+${exceededPct}%).
 
-Please investigate potential anomalies, motor overloads, or phase unbalances in this section and submit an enquiry response.
+Please investigate operating equipment, batch cycles, or motor load in this section and submit your departmental response on the portal.
 
 Regards,
 ${currentUser.fullName}
@@ -36,7 +56,6 @@ Plant Operations Department`;
 
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState(defaultBody);
-  const [recipient, setRecipient] = useState('electrical.hod@smruthi-organics.com');
   const [isSent, setIsSent] = useState(false);
 
   // Find active alert if exists
@@ -58,8 +77,9 @@ Plant Operations Department`;
       message,
       sentBy: currentUser.fullName,
       sentByEmail: currentUser.email,
-      sentTo: 'Er. Rajesh K. More (Electrical Admin)',
-      sentToEmail: recipient,
+      sentTo: matchedTarget.name,
+      sentToEmail: matchedTarget.email,
+      targetRole: matchedTarget.role,
     });
 
     setIsSent(true);
@@ -85,9 +105,9 @@ Plant Operations Department`;
             </div>
             <h3 className="text-lg font-bold text-white">Enquiry Dispatched Successfully</h3>
             <p className="text-xs text-slate-300 max-w-md mx-auto">
-              Direct enquiry email and system ticket sent to Electrical Admin (
-              <span className="text-cyan-300 font-mono">{recipient}</span>). An alert record has
-              been logged in the Alert History.
+              In-app departmental enquiry ticket sent to {matchedTarget.name} (
+              <span className="text-cyan-300 font-mono">{matchedTarget.email}</span>). A notification has
+              been routed to their department portal.
             </p>
           </div>
         ) : (
@@ -98,10 +118,10 @@ Plant Operations Department`;
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">
-                  Send Enquiry to Electrical Admin
+                  Send Inquiry: {section.name}
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Plant Admin enquiry for threshold breach on {section.name}
+                  Targeted departmental inquiry for {section.name} threshold breach
                 </p>
               </div>
             </div>
@@ -126,18 +146,17 @@ Plant Operations Department`;
               </div>
             </div>
 
-            {/* Recipient */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Recipient (Electrical Admin Email):
-              </label>
-              <input
-                type="email"
-                required
-                value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-cyan-500"
-              />
+            {/* Designated In-Charge Sub-ID Recipient */}
+            <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 text-xs">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                Designated Recipient (Sub-ID / Dept In-Charge):
+              </span>
+              <div className="font-bold text-white mt-0.5 flex items-center justify-between">
+                <span>{matchedTarget.name}</span>
+                <span className="text-[11px] font-mono text-purple-300 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800">
+                  {matchedTarget.email}
+                </span>
+              </div>
             </div>
 
             {/* Subject */}

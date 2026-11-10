@@ -1,4 +1,14 @@
-export type UserRole = 'plant_admin' | 'electrical_admin' | 'viewer' | 'reading_operator';
+export type UserRole =
+  | 'plant_admin'
+  | 'electrical_admin'
+  | 'viewer'
+  | 'reading_operator'
+  | 'block_a'
+  | 'block_b'
+  | 'block_c'
+  | 'block_d'
+  | 'block_eg'
+  | 'block_f';
 
 export interface UserProfile {
   id: string;
@@ -129,8 +139,9 @@ export interface EnquiryRecord {
   message: string;
   sentBy: string; // Plant Admin name
   sentByEmail: string;
-  sentTo: string; // Electrical Admin
+  sentTo: string; // Electrical Admin or Block In-Charge
   sentToEmail: string;
+  targetRole?: UserRole; // Sub-ID expected to respond (e.g. block_a, block_b, electrical_admin)
   status: 'pending' | 'in_review' | 'resolved';
   replyMessage?: string;
   repliedBy?: string;

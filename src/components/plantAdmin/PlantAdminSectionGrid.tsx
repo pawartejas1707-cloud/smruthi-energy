@@ -321,7 +321,7 @@ export const PlantAdminSectionGrid: React.FC = () => {
                     <button
                       onClick={() => setEnquirySection({ section, units: consumedKwh })}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold shadow-sm transition-colors cursor-pointer"
-                      title="Send Direct Enquiry to Electrical Admin"
+                      title="Send Direct Enquiry to Department In-Charge"
                     >
                       <Mail className="w-3 h-3" />
                       <span>Send Enquiry</span>

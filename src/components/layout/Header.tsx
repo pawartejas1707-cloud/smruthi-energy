@@ -38,17 +38,47 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMongoModal, onOpenAlerts }
     plant_admin: {
       label: 'Plant Admin',
       color: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-      badge: 'Monitor & Enquiry',
+      badge: 'Head of Factory',
+    },
+    reading_operator: {
+      label: 'Reading Operator',
+      color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      badge: 'Entry Only',
     },
     viewer: {
       label: 'Viewer',
       color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
       badge: 'Read-Only',
     },
-    reading_operator: {
-      label: 'Reading Operator',
+    block_a: {
+      label: 'A Block In-Charge',
+      color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+      badge: 'Sub-ID',
+    },
+    block_b: {
+      label: 'B Block In-Charge',
+      color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+      badge: 'Sub-ID',
+    },
+    block_c: {
+      label: 'C Block In-Charge',
+      color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      badge: 'Sub-ID',
+    },
+    block_d: {
+      label: 'D Block In-Charge',
+      color: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+      badge: 'Sub-ID',
+    },
+    block_eg: {
+      label: 'E & G Block In-Charge',
+      color: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+      badge: 'Sub-ID',
+    },
+    block_f: {
+      label: 'F Block In-Charge',
       color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-      badge: 'Entry Only',
+      badge: 'Sub-ID',
     },
   };
 
@@ -170,17 +200,20 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMongoModal, onOpenAlerts }
             </button>
 
             {roleDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[85vh] overflow-y-auto">
                 <div className="px-3 py-2 border-b border-slate-800 mb-1">
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Simulate User Role (4 Roles)
+                    Switch User Role
                   </p>
                   <p className="text-xs text-slate-300 font-medium truncate mt-0.5">
                     {currentUser.fullName}
                   </p>
                 </div>
 
-                <div className="space-y-1">
+                <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Core Plant Roles
+                </div>
+                <div className="space-y-0.5 mb-2">
                   {(
                     [
                       'electrical_admin',
@@ -195,7 +228,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMongoModal, onOpenAlerts }
                         setCurrentRole(role);
                         setRoleDropdownOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left ${
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-left ${
                         currentRole === role
                           ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800/80'
                           : 'text-slate-300 hover:bg-slate-800/80'
@@ -209,6 +242,45 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMongoModal, onOpenAlerts }
                       </div>
                       {currentRole === role && (
                         <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider border-t border-slate-800 pt-1.5">
+                  Production Block Sub-IDs
+                </div>
+                <div className="space-y-0.5">
+                  {(
+                    [
+                      'block_a',
+                      'block_b',
+                      'block_c',
+                      'block_d',
+                      'block_eg',
+                      'block_f',
+                    ] as UserRole[]
+                  ).map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => {
+                        setCurrentRole(role);
+                        setRoleDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-left ${
+                        currentRole === role
+                          ? 'bg-blue-950/60 text-blue-300 border border-blue-800/80'
+                          : 'text-slate-300 hover:bg-slate-800/80'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-semibold">{roleLabels[role].label}</div>
+                        <div className="text-[10px] text-slate-400">
+                          {roleLabels[role].badge}
+                        </div>
+                      </div>
+                      {currentRole === role && (
+                        <CheckCircle className="w-3.5 h-3.5 text-blue-400" />
                       )}
                     </button>
                   ))}

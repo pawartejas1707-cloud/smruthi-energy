@@ -81,6 +81,48 @@ const ROLE_PROFILES: Record<UserRole, UserProfile> = {
     role: 'reading_operator',
     department: 'Substation Operations',
   },
+  block_a: {
+    id: 'usr-block-a',
+    email: 'block-a@smruthi-organics.com',
+    fullName: 'Sanjay Deshmukh (A Block In-Charge)',
+    role: 'block_a',
+    department: 'Manufacturing Block A',
+  },
+  block_b: {
+    id: 'usr-block-b',
+    email: 'block-b@smruthi-organics.com',
+    fullName: 'Anil Kulkarni (B Block In-Charge)',
+    role: 'block_b',
+    department: 'Manufacturing Block B',
+  },
+  block_c: {
+    id: 'usr-block-c',
+    email: 'block-c@smruthi-organics.com',
+    fullName: 'Prakash Shinde (C Block In-Charge)',
+    role: 'block_c',
+    department: 'Manufacturing Block C',
+  },
+  block_d: {
+    id: 'usr-block-d',
+    email: 'block-d@smruthi-organics.com',
+    fullName: 'Mahesh Jadhav (D Block In-Charge)',
+    role: 'block_d',
+    department: 'Manufacturing Block D',
+  },
+  block_eg: {
+    id: 'usr-block-eg',
+    email: 'block-eg@smruthi-organics.com',
+    fullName: 'Sunil Chavan (E & G Block In-Charge)',
+    role: 'block_eg',
+    department: 'Manufacturing E & G Block',
+  },
+  block_f: {
+    id: 'usr-block-f',
+    email: 'block-f@smruthi-organics.com',
+    fullName: 'Vikas Gaikwad (F Block In-Charge)',
+    role: 'block_f',
+    department: 'Manufacturing Block F',
+  },
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
