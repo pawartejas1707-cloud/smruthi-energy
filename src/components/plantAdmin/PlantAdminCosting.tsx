@@ -639,25 +639,13 @@ export const PlantAdminCosting: React.FC = () => {
                       <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 tracking-tight text-emerald-800">
                         {formatINR(row.totalCost)}
                       </div>
+                      <div className="text-[10px] text-slate-500 font-medium mt-1.5 flex items-center justify-between">
+                        <span>Units Consumed:</span>
+                        <span className="font-mono font-bold text-slate-900">{formatUnits(row.consumedKwh)} kWh</span>
+                      </div>
                       <div className="text-[10px] text-slate-500 font-medium mt-1 flex items-center justify-between">
                         <span>Effective Rate:</span>
                         <span className="font-mono font-bold text-slate-700">₹{row.effectiveRate} / kWh</span>
-                      </div>
-                    </div>
-
-                    {/* Consumption & Sub-Charges Details */}
-                    <div className="space-y-1.5 text-xs font-mono mb-3">
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-[11px] font-sans text-slate-500">Units Consumed:</span>
-                        <span className="font-bold text-slate-900">{formatUnits(row.consumedKwh)} kWh</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-[11px] font-sans text-slate-500">Energy Charges:</span>
-                        <span className="font-semibold text-slate-700">{formatINR(row.energyCharges)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-[11px] font-sans text-slate-500">Duty & FAC:</span>
-                        <span className="font-semibold text-slate-500">{formatINR(row.fuelCharges + row.duty)}</span>
                       </div>
                     </div>
 
@@ -690,8 +678,6 @@ export const PlantAdminCosting: React.FC = () => {
                   <th className="p-3">Rank</th>
                   <th className="p-3">Feeder Block</th>
                   <th className="p-3 text-right">Consumed Units (kWh)</th>
-                  <th className="p-3 text-right">Energy Charges (₹)</th>
-                  <th className="p-3 text-right">Duty & FAC (₹)</th>
                   <th className="p-3 text-right font-black text-slate-900">Total Bill (₹)</th>
                   <th className="p-3 text-right">Effective Rate</th>
                   <th className="p-3 text-right">% of Plant Bill</th>
@@ -726,12 +712,6 @@ export const PlantAdminCosting: React.FC = () => {
                       </td>
                       <td className="p-3 text-right text-slate-800">
                         {formatUnits(row.consumedKwh)}
-                      </td>
-                      <td className="p-3 text-right text-slate-600">
-                        {formatINR(row.energyCharges)}
-                      </td>
-                      <td className="p-3 text-right text-slate-500">
-                        {formatINR(row.fuelCharges + row.duty)}
                       </td>
                       <td className="p-3 text-right font-extrabold text-slate-900 text-sm">
                         {formatINR(row.totalCost)}

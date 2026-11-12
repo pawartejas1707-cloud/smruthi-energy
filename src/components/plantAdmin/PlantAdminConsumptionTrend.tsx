@@ -14,9 +14,7 @@ import {
 import {
   Activity,
   Layers,
-  Sliders,
   Calendar,
-  RotateCcw,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatUnits } from '../../lib/calculations';
@@ -32,7 +30,6 @@ export const PlantAdminConsumptionTrend: React.FC = () => {
   const [chartStyle, setChartStyle] = useState<ChartStyle>('area');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
-  const [customLimit, setCustomLimit] = useState<number | null>(null);
 
   // Active section
   const activeSection = useMemo(() => {
@@ -40,15 +37,13 @@ export const PlantAdminConsumptionTrend: React.FC = () => {
     return sections.find((s) => s.id === selectedSectionId) || null;
   }, [selectedSectionId, sections]);
 
-  // Default limit
-  const defaultLimit = useMemo(() => {
+  // Default limit configured by Electrical Admin
+  const effectiveLimit = useMemo(() => {
     if (activeSection) {
       return activeSection.dailyLimitKwh;
     }
     return sections.reduce((sum, s) => sum + s.dailyLimitKwh, 0);
   }, [activeSection, sections]);
-
-  const effectiveLimit = customLimit !== null ? customLimit : defaultLimit;
 
   // Process data for the chart
   const chartData = useMemo(() => {
@@ -206,7 +201,6 @@ export const PlantAdminConsumptionTrend: React.FC = () => {
               value={selectedSectionId}
               onChange={(e) => {
                 setSelectedSectionId(e.target.value);
-                setCustomLimit(null);
               }}
               className="bg-transparent text-slate-900 font-bold focus:outline-none cursor-pointer pr-2 max-w-[180px] truncate"
             >
@@ -363,7 +357,7 @@ export const PlantAdminConsumptionTrend: React.FC = () => {
         </ResponsiveContainer>
       </div>
 
-      {/* Graph Legend & Configurable Limit Line slider */}
+      {/* Graph Legend */}
       <div className="flex flex-wrap items-center justify-between gap-4 mt-3 pt-3 border-t border-slate-200 text-xs text-slate-600">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5 font-medium">
@@ -372,32 +366,8 @@ export const PlantAdminConsumptionTrend: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5 font-medium">
             <span className="w-3 h-0.5 bg-red-600 border border-red-600" />
-            <span>Allocated Limit Line ({formatUnits(effectiveLimit)} kWh)</span>
+            <span>Allocated Electrical Limit ({formatUnits(effectiveLimit)} kWh)</span>
           </div>
-        </div>
-
-        {/* Limit Adjustment on the fly */}
-        <div className="flex items-center gap-2">
-          <Sliders className="w-3.5 h-3.5 text-slate-500" />
-          <span className="font-medium text-slate-700">Reference Limit:</span>
-          <input
-            type="range"
-            min={Math.round(defaultLimit * 0.5)}
-            max={Math.round(defaultLimit * 1.5)}
-            step={50}
-            value={effectiveLimit}
-            onChange={(e) => setCustomLimit(Number(e.target.value))}
-            className="w-24 accent-blue-600 cursor-pointer"
-          />
-          {customLimit !== null && (
-            <button
-              onClick={() => setCustomLimit(null)}
-              className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
-              title="Reset to default limit"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-          )}
         </div>
       </div>
     </div>
